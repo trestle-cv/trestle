@@ -29,6 +29,7 @@ globalThis.TrestleDatabaseSetup = (() => {
       applyVisible: pendingPostgres,
       applyEnabled: pendingPostgres && urlNonEmpty,
       adminFormVisible: !pendingPostgres,
+      registrationPolicyVisible: firstRun && !pendingPostgres,
       adminEmailRequired: !pendingPostgres,
       adminPasswordRequired: !pendingPostgres
     };
@@ -178,7 +179,7 @@ function selectedDatabase(){return databasePreview.querySelector('[name="databas
 const administratorFields=document.querySelector("#administrator-fields");
 let databaseSelectable=false;
 function databaseSetupState(){return TrestleDatabaseSetup.computeState({mode:authForm.classList.contains("first-run")?"first-run":"sign-in",selectable:databaseSelectable,provider:selectedDatabase(),url:databaseUrlInput.value})}
-function syncDatabaseFields(){const state=databaseSetupState();databasePreview.hidden=!state.previewVisible;postgresConfiguration.hidden=!state.postgresConfigVisible;databaseApply.hidden=!state.applyVisible;databaseApply.disabled=!state.applyEnabled;administratorFields.hidden=!state.adminFormVisible;authEmail.required=state.adminEmailRequired;authPassword.required=state.adminPasswordRequired;if(!state.postgresConfigVisible){databaseResult.textContent="";databaseResult.className=""}}
+function syncDatabaseFields(){const state=databaseSetupState();databasePreview.hidden=!state.previewVisible;postgresConfiguration.hidden=!state.postgresConfigVisible;databaseApply.hidden=!state.applyVisible;databaseApply.disabled=!state.applyEnabled;administratorFields.hidden=!state.adminFormVisible;document.querySelector("#registration-policy-field").hidden=!state.registrationPolicyVisible;authEmail.required=state.adminEmailRequired;authPassword.required=state.adminPasswordRequired;authForm.querySelector("#auth-submit").textContent=TrestleDatabaseSetup.authGateCopy(setupRequired).submitLabel;if(!state.postgresConfigVisible){databaseResult.textContent="";databaseResult.className=""}}
 function syncDatabaseApply(){databaseApply.disabled=!databaseSetupState().applyEnabled}
 new MutationObserver(syncDatabaseFields).observe(authForm,{attributes:true,attributeFilter:["class"]});
 databaseUrlInput.addEventListener("input",syncDatabaseApply);

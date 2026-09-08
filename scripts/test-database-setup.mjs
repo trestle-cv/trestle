@@ -51,6 +51,7 @@ check("fresh sqlite", machine.computeState(firstRun), {
   applyVisible: false,
   applyEnabled: false,
   adminFormVisible: true,
+  registrationPolicyVisible: true,
   adminEmailRequired: true,
   adminPasswordRequired: true
 });
@@ -137,6 +138,7 @@ check("sign-in mode", machine.computeState(signIn), {
   applyVisible: false,
   applyEnabled: false,
   adminFormVisible: true,
+  registrationPolicyVisible: false,
   adminEmailRequired: true,
   adminPasswordRequired: true
 });
