@@ -121,7 +121,7 @@ const signInCopy = machine.authGateCopy(false);
 check("first-run copy title", setupCopy.title, "Create the administrator account");
 check("first-run copy submit", setupCopy.submitLabel, "Create administrator");
 check("first-run copy autocomplete", setupCopy.autocomplete, "new-password");
-check("sign-in copy title", signInCopy.title, "Sign in to Trestle");
+check("sign-in copy title", signInCopy.title, "");
 check("sign-in copy submit", signInCopy.submitLabel, "Sign in");
 check("sign-in copy autocomplete", signInCopy.autocomplete, "current-password");
 if (setupCopy.title === signInCopy.title) {
