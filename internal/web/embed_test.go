@@ -46,12 +46,24 @@ func TestDashboardAssetsAreContentVersionedAndUnversionedRequestsRevalidate(t *t
 
 func TestLauncherIncludesConfigurationSurfaceAndFavicon(t *testing.T) {
 	h, err := New("")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/launcher.html", nil))
-	body:=w.Body.String()
-	for _,required:=range []string{"/assets/images/favicon.svg","data-config-view","data-import","data-export","data-add-instance","data-delete-selected","/assets/css/launcher.css?v="}{if !strings.Contains(body,required){t.Errorf("launcher is missing %q",required)}}
-	for _,asset:=range []string{"/assets/css/launcher.css","/assets/js/launcher.js","/assets/images/favicon.svg"}{assetResponse:=httptest.NewRecorder();h.ServeHTTP(assetResponse,httptest.NewRequest(http.MethodGet,asset,nil));if assetResponse.Code!=http.StatusOK{t.Errorf("%s returned %d",asset,assetResponse.Code)}}
+	body := w.Body.String()
+	for _, required := range []string{"/assets/images/favicon.svg", "data-config-view", "data-open-config", "data-import", "data-export", "data-add-instance", "data-delete-selected", "Add and manage the instances available from this launcher.", "/assets/css/launcher.css?v="} {
+		if !strings.Contains(body, required) {
+			t.Errorf("launcher is missing %q", required)
+		}
+	}
+	for _, asset := range []string{"/assets/css/launcher.css", "/assets/js/launcher.js", "/assets/images/favicon.svg"} {
+		assetResponse := httptest.NewRecorder()
+		h.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, asset, nil))
+		if assetResponse.Code != http.StatusOK {
+			t.Errorf("%s returned %d", asset, assetResponse.Code)
+		}
+	}
 }
 
 func TestStaticOverride(t *testing.T) {
