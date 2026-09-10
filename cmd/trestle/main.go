@@ -30,6 +30,7 @@ import (
 	functionapi "github.com/trestle-cv/trestle/internal/functions"
 	"github.com/trestle-cv/trestle/internal/identities"
 	"github.com/trestle-cv/trestle/internal/jobs"
+	"github.com/trestle-cv/trestle/internal/launcher"
 	"github.com/trestle-cv/trestle/internal/records"
 	"github.com/trestle-cv/trestle/internal/rules"
 	"github.com/trestle-cv/trestle/internal/server"
@@ -254,7 +255,11 @@ func main() {
 	adminRoutes.Handle("/admin/v1/deployment", deploymentAPI)
 	adminRoutes.Handle("/admin/v1/support-bundle", deploymentAPI)
 	adminRoutes.Handle("/", admin)
-	app := server.NewWithOptions(logger, dashboard, apiRoutes, adminRoutes, server.Options{TrustedProxies: cfg.TrustedProxies})
+	launcherUI := launcher.New(database.DB(), admin, dashboard)
+	launcherRoutes := http.NewServeMux()
+	launcherRoutes.HandleFunc("/api/launcher/instances", launcherUI.Instances)
+	launcherRoutes.HandleFunc("/api/launcher/config", launcherUI.Config)
+	app := server.NewWithOptions(logger, dashboard, apiRoutes, adminRoutes, server.Options{TrustedProxies: cfg.TrustedProxies, Root: http.HandlerFunc(launcherUI.Root), Manage: admin.ManagePage(dashboard), LauncherAPI: launcherRoutes})
 	app.SetDatabaseCheck(database.Ping)
 	httpServer := &http.Server{Addr: cfg.Listen, Handler: app.Handler(), ReadHeaderTimeout: cfg.ReadHeaderTimeout, ReadTimeout: cfg.ReadTimeout, IdleTimeout: cfg.IdleTimeout, MaxHeaderBytes: cfg.MaxHeaderBytes}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

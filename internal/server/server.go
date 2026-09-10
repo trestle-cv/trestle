@@ -17,7 +17,10 @@ import (
 	"github.com/trestle-cv/trestle/internal/requestmeta"
 )
 
-type Options struct{ TrustedProxies []netip.Prefix }
+type Options struct {
+	TrustedProxies            []netip.Prefix
+	Root, Manage, LauncherAPI http.Handler
+}
 
 type Server struct {
 	logger  *slog.Logger
@@ -50,6 +53,7 @@ func newServer(logger *slog.Logger, dashboard, api, admin http.Handler, options 
 	s := &Server{logger: logger}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /system/health", s.health)
+	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /system/ready", s.readiness)
 	mux.HandleFunc("GET /system/version", s.version)
 	if admin != nil {
@@ -58,8 +62,28 @@ func newServer(logger *slog.Logger, dashboard, api, admin http.Handler, options 
 	if api != nil {
 		mux.Handle("/api/v1/", api)
 	}
+	if options.LauncherAPI != nil {
+		mux.Handle("/api/launcher/", options.LauncherAPI)
+	}
+	if options.Manage != nil {
+		mux.Handle("/manage/", options.Manage)
+		mux.HandleFunc("GET /manage", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/manage/", http.StatusPermanentRedirect)
+		})
+	}
 	if dashboard != nil {
-		mux.Handle("/", dashboard)
+		if options.Root == nil {
+			mux.Handle("/", dashboard)
+		} else {
+			mux.Handle("/assets/", dashboard)
+			mux.Handle("/app/", dashboard)
+			mux.HandleFunc("GET /app", func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, "/app/", http.StatusPermanentRedirect)
+			})
+		}
+	}
+	if options.Root != nil {
+		mux.Handle("/", options.Root)
 	}
 	s.handler = s.proxyContext(options.TrustedProxies, s.requestContext(mux))
 	return s

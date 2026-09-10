@@ -51,3 +51,5 @@ modernc.org/strutil v1.2.0 h1:agBi9dp1I+eOnxXeiZawM8F4LawKv4NzGWSaLfyeNZA=
 modernc.org/strutil v1.2.0/go.mod h1:/mdcBmfOibveCTBxUl5B5l6W+TTH1FXPLHZE6bTosX0=
 modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
+github.com/gantry-tools/gantry-core v0.0.0-20260910152905-71aa53dd9318 h1:Sqgp1BrtZmQCmz5S8W9i6fQxedhnjCHoE60H0ygFVbY=
+github.com/gantry-tools/gantry-core v0.0.0-20260910152905-71aa53dd9318/go.mod h1:PJCXWKDYXvPVDeJ6kT8hHPjiBNZ8sx3ug/kLYsf8was=

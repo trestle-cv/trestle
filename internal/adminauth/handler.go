@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	coreauth "github.com/gantry-tools/gantry-core/auth"
 	"github.com/trestle-cv/trestle/internal/httperr"
 	"github.com/trestle-cv/trestle/internal/requestmeta"
 	"github.com/trestle-cv/trestle/internal/store"
@@ -79,6 +80,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logout(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/admin/v1/password":
 		h.changePassword(w, r)
+	case r.URL.Path == "/admin/v1/manage/users":
+		h.manageUsers(w, r)
+	case r.URL.Path == "/admin/v1/manage/roles":
+		h.manageRoles(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -200,8 +205,13 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := randomToken(18)
 	now := h.now().UTC().Format(time.RFC3339Nano)
-	if _, err := tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", "adm_"+id, email, hash, now); err != nil {
+	adminID := "adm_" + id
+	if _, err := tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", adminID, email, hash, now); err != nil {
 		writeError(w, 409, "setup_complete", "Initial setup has already been completed.")
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), "INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES(?,?)", adminID, "administrator"); err != nil {
+		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
 	}
 	// The initial application registration policy is selected atomically with
@@ -224,7 +234,7 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "setup_complete", "Initial setup has already been completed.")
 		return
 	}
-	h.issueSession(w, r, "adm_"+id, email)
+	h.issueSession(w, r, adminID, email)
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +304,36 @@ func (h *Handler) Authorize(r *http.Request, mutation bool) (Principal, bool) {
 	}
 	return Principal{AdminID: id, Email: email, SessionID: sessionID}, true
 }
+
+func (h *Handler) AuthorizeCapability(r *http.Request, mutation bool, capability string) (Principal, bool) {
+	principal, ok := h.Authorize(r, mutation)
+	if !ok {
+		return Principal{}, false
+	}
+	rows, err := h.db.QueryContext(r.Context(), "SELECT r.capabilities_json FROM _trestle_roles r JOIN _trestle_admin_roles ar ON ar.role_id=r.id WHERE ar.admin_id=?", principal.AdminID)
+	if err != nil {
+		return Principal{}, false
+	}
+	defer rows.Close()
+	var effective []string
+	for rows.Next() {
+		var raw string
+		if rows.Scan(&raw) != nil {
+			return Principal{}, false
+		}
+		var caps []string
+		if json.Unmarshal([]byte(raw), &caps) != nil {
+			return Principal{}, false
+		}
+		effective = append(effective, caps...)
+	}
+	if rows.Err() != nil || !coreauth.HasCapability(effective, capability) {
+		return Principal{}, false
+	}
+	return principal, true
+}
+
+func NewID(prefix string) string { value, _ := randomToken(18); return prefix + "_" + value }
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	_, _, sessionID, ok := h.authenticate(r)
 	if !ok {

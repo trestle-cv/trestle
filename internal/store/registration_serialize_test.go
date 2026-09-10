@@ -39,6 +39,9 @@ func buildExistingV14(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec(`CREATE TABLE _trestle_system_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL) STRICT`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`CREATE TABLE _trestle_admins (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL, disabled_at TEXT) STRICT`); err != nil {
+		t.Fatal(err)
+	}
 	now := "2026-01-01T00:00:00Z"
 	for i := 1; i <= 14; i++ {
 		if _, err := db.Exec("INSERT INTO _trestle_schema_migrations(version,name,applied_at) VALUES(?,?,?)", i, migrations[i-1].name, now); err != nil {

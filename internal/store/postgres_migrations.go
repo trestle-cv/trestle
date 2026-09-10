@@ -47,4 +47,10 @@ CREATE TABLE _trestle_app_invitations (id TEXT PRIMARY KEY, kind TEXT NOT NULL C
 CREATE INDEX _trestle_app_invitations_email ON _trestle_app_invitations(email);
 CREATE TABLE _trestle_app_access_requests (id TEXT PRIMARY KEY, email TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected','expired')), created_at TEXT NOT NULL, decided_at TEXT, decided_by_admin_id TEXT);
 CREATE UNIQUE INDEX _trestle_app_access_requests_pending_email ON _trestle_app_access_requests(email) WHERE status = 'pending';`,
+	16: `
+CREATE TABLE _trestle_roles (id TEXT PRIMARY KEY, name TEXT NOT NULL, capabilities_json TEXT NOT NULL, built_in BOOLEAN NOT NULL);
+CREATE TABLE _trestle_admin_roles (admin_id TEXT NOT NULL REFERENCES _trestle_admins(id) ON DELETE CASCADE, role_id TEXT NOT NULL REFERENCES _trestle_roles(id) ON DELETE RESTRICT, PRIMARY KEY(admin_id,role_id));
+INSERT INTO _trestle_roles(id,name,capabilities_json,built_in) VALUES('administrator','Administrator','["*"]',TRUE);
+INSERT INTO _trestle_admin_roles(admin_id,role_id) SELECT id,'administrator' FROM _trestle_admins;`,
+	17: `CREATE TABLE _trestle_launcher_instances (id TEXT PRIMARY KEY, position INTEGER NOT NULL UNIQUE, name TEXT NOT NULL, domain TEXT NOT NULL, port INTEGER CHECK(port BETWEEN 1 AND 65535));`,
 }

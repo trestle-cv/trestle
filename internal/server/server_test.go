@@ -49,6 +49,25 @@ func TestHealthReadinessAndRequestID(t *testing.T) {
 	}
 }
 
+func TestGantryRouteConventionMounts(t *testing.T) {
+	dashboard := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("app:" + r.URL.Path)) })
+	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("launcher")) })
+	manage := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("manage")) })
+	s := NewWithOptions(slog.Default(), dashboard, nil, nil, Options{Root: root, Manage: manage})
+	for _, tc := range []struct {
+		path     string
+		status   int
+		body     string
+		location string
+	}{{"/", 200, "launcher", ""}, {"/app", 308, "", "/app/"}, {"/app/overview", 200, "app:/app/overview", ""}, {"/assets/test.css", 200, "app:/assets/test.css", ""}, {"/manage", 308, "", "/manage/"}, {"/manage/", 200, "manage", ""}, {"/healthz", 200, "status", ""}} {
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.body) || w.Header().Get("Location") != tc.location {
+			t.Errorf("%s: status=%d body=%q location=%q", tc.path, w.Code, w.Body.String(), w.Header().Get("Location"))
+		}
+	}
+}
+
 func TestForwardedHeadersRequireTrustedImmediatePeer(t *testing.T) {
 	echo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(requestmeta.Scheme(r) + " " + requestmeta.ClientIP(r)))

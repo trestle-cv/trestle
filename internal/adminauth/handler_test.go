@@ -133,6 +133,33 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 	}
 }
 
+func TestSetupAdministratorGetsSharedCapabilitiesAndManageRequiresCSRF(t *testing.T) {
+	h := testHandler(t, "sqlite")
+	setup := request(t, h, http.MethodPost, "/admin/v1/setup", credentials{Email: "admin@example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
+	if setup.Code != http.StatusOK {
+		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
+	}
+	var session sessionResponse
+	if err := json.NewDecoder(setup.Body).Decode(&session); err != nil {
+		t.Fatal(err)
+	}
+	cookie := setup.Result().Cookies()[0]
+	r := httptest.NewRequest(http.MethodGet, "/admin/v1/manage/users", nil)
+	r.AddCookie(cookie)
+	if _, ok := h.AuthorizeCapability(r, false, "accounts.manage"); !ok {
+		t.Fatal("setup administrator lacks shared wildcard capability")
+	}
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, ""); got.Code != http.StatusForbidden {
+		t.Fatalf("mutation without CSRF=%d", got.Code)
+	}
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusNoContent {
+		t.Fatalf("create=%d %s", got.Code, got.Body.String())
+	}
+	if got := request(t, h, http.MethodGet, "/admin/v1/manage/users", nil, cookie, ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), "user@example.com") {
+		t.Fatalf("list=%d %s", got.Code, got.Body.String())
+	}
+}
+
 func TestAdministratorCanChangeOwnPassword(t *testing.T) {
 	for _, provider := range storetest.Providers(t) {
 		t.Run(provider, func(t *testing.T) {

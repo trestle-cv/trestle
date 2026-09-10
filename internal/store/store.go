@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CurrentVersion = 15
+const CurrentVersion = 17
 
 type Store struct {
 	db                    *sql.DB
@@ -329,6 +329,28 @@ CREATE TABLE _trestle_app_access_requests (
   decided_by_admin_id TEXT
 ) STRICT;
 CREATE UNIQUE INDEX _trestle_app_access_requests_pending_email ON _trestle_app_access_requests(email) WHERE status = 'pending';
+`}, {16, "gantry authorization roles", `
+CREATE TABLE _trestle_roles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  capabilities_json TEXT NOT NULL,
+  built_in INTEGER NOT NULL CHECK(built_in IN (0,1))
+) STRICT;
+CREATE TABLE _trestle_admin_roles (
+  admin_id TEXT NOT NULL REFERENCES _trestle_admins(id) ON DELETE CASCADE,
+  role_id TEXT NOT NULL REFERENCES _trestle_roles(id) ON DELETE RESTRICT,
+  PRIMARY KEY(admin_id,role_id)
+) STRICT;
+INSERT INTO _trestle_roles(id,name,capabilities_json,built_in) VALUES('administrator','Administrator','["*"]',1);
+INSERT INTO _trestle_admin_roles(admin_id,role_id) SELECT id,'administrator' FROM _trestle_admins;
+`}, {17, "embedded instance launcher", `
+CREATE TABLE _trestle_launcher_instances (
+  id TEXT PRIMARY KEY,
+  position INTEGER NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  port INTEGER CHECK(port BETWEEN 1 AND 65535)
+) STRICT;
 `}}
 
 func Open(ctx context.Context, dataDir string) (*Store, error) {

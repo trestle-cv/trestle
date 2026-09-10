@@ -163,6 +163,9 @@ func TestBootstrapSchemaIntegrity(t *testing.T) {
 		"_trestle_app_registration_policy": true,
 		"_trestle_app_invitations":         true,
 		"_trestle_app_access_requests":     true,
+		"_trestle_roles":                   true,
+		"_trestle_admin_roles":             true,
+		"_trestle_launcher_instances":      true,
 	}
 	expectedIndexes := map[string]bool{
 		"_trestle_admin_sessions_admin":              true,

@@ -42,7 +42,7 @@ func (h *Handler) Emit(ctx context.Context, tx store.Transaction, actorKind, act
 	return err
 }
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.admin.Authorize(r, false); !ok {
+	if _, ok := h.admin.AuthorizeCapability(r, false, "audit.read"); !ok {
 		http.Error(w, "forbidden", 403)
 		return
 	}
