@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	corelauncher "github.com/gantry-tools/gantry-core/launcher"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/store"
 )
@@ -70,8 +71,16 @@ func (h *Handler) Root(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Has("config") {
+		if h.auth == nil {
+			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T")
+			return
+		}
+		if _, ok := h.auth.Authorize(r, false); !ok {
+			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T")
+			return
+		}
 		if _, ok := h.auth.AuthorizeCapability(r, false, "launcher.configure.all"); !ok {
-			http.Redirect(w, r, "/app/?return=%2F%3Fconfig", 302)
+			corelauncher.WriteAccessError(w, http.StatusForbidden, "Trestle", "T")
 			return
 		}
 		h.page(w, r)

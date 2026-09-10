@@ -50,6 +50,15 @@ func TestAdaptiveRoot(t *testing.T) {
 	}
 }
 
+func TestConfigRequiresAuthenticationWithoutRenderingControls(t *testing.T) {
+	h := testHandler(t)
+	w := httptest.NewRecorder()
+	h.Root(w, httptest.NewRequest(http.MethodGet, "/?config", nil))
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "Authentication required") || strings.Contains(w.Body.String(), "Current instances") {
+		t.Fatalf("config denial: %d %q", w.Code, w.Body.String())
+	}
+}
+
 func TestLauncherDocumentCompatibility(t *testing.T) {
 	port := 7333
 	items, err := normalize(Document{Version: 1, Product: "trestle", Instances: []Instance{{Name: "Local", Domain: "127.0.0.1", Port: &port}, {Name: "Cloud", Domain: "https://db.example"}}})
