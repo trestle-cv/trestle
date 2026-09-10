@@ -35,7 +35,7 @@ func New(staticDir string) (http.Handler, error) {
 		root = os.DirFS(staticDir)
 	}
 	hash := sha256.New()
-	for _, name := range []string{"assets/css/style.css", "assets/js/script.js", "assets/css/manage.css", "assets/js/manage.js", "assets/js/launcher.js"} {
+	for _, name := range []string{"assets/css/style.css", "assets/js/script.js", "assets/css/manage.css", "assets/css/launcher.css", "assets/js/manage.js", "assets/js/launcher.js"} {
 		data, err := fs.ReadFile(root, name)
 		if err != nil {
 			continue
