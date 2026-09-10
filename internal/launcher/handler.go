@@ -72,15 +72,15 @@ func (h *Handler) Root(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Query().Has("config") {
 		if h.auth == nil {
-			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T")
+			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T", "#f2a66f")
 			return
 		}
 		if _, ok := h.auth.Authorize(r, false); !ok {
-			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T")
+			corelauncher.WriteAccessError(w, http.StatusUnauthorized, "Trestle", "T", "#f2a66f")
 			return
 		}
 		if _, ok := h.auth.AuthorizeCapability(r, false, "launcher.configure.all"); !ok {
-			corelauncher.WriteAccessError(w, http.StatusForbidden, "Trestle", "T")
+			corelauncher.WriteAccessError(w, http.StatusForbidden, "Trestle", "T", "#f2a66f")
 			return
 		}
 		h.page(w, r)
