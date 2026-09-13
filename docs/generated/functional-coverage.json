@@ -1,0 +1,1395 @@
+{
+  "schema_version": 1,
+  "project": "trestle",
+  "operations": [
+    {
+      "operation": "trestle.admin.password.update",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/password",
+      "cli": "auth-password update",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.admin.password.update.request.v1",
+      "output_schema": "trestle.admin.password.update.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.roles.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/manage/roles",
+      "cli": "roles list",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "roles.manage",
+      "output_schema": "trestle.admin.roles.list.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.roles.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/admin/v1/manage/roles",
+      "cli": "roles update",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "roles.manage",
+      "input_schema": "trestle.admin.roles.update.request.v1",
+      "output_schema": "trestle.admin.roles.update.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.session.current",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/session",
+      "cli": "auth session",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.admin.session.current.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.session.login",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/session",
+      "cli": "auth login",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.admin.session.login.request.v1",
+      "output_schema": "trestle.admin.session.login.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.session.logout",
+      "website": true,
+      "method": "DELETE",
+      "route": "/admin/v1/session",
+      "cli": "auth logout",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.admin.session.logout.request.v1",
+      "output_schema": "trestle.admin.session.logout.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.setup.apply",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/setup",
+      "cli": "setup apply",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.admin.setup.apply.request.v1",
+      "output_schema": "trestle.admin.setup.apply.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.setup.status",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/setup/status",
+      "cli": "setup status",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.admin.setup.status.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.users.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/manage/users",
+      "cli": "users list",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "accounts.manage",
+      "output_schema": "trestle.admin.users.list.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.admin.users.manage",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/manage/users",
+      "cli": "users manage",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "accounts.manage",
+      "input_schema": "trestle.admin.users.manage.request.v1",
+      "output_schema": "trestle.admin.users.manage.response.v1",
+      "tests": [
+        "internal/adminauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.api.schema",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/api/schema",
+      "cli": "api schema",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.api.schema.response.v1",
+      "tests": [
+        "internal/apidocs/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.app-users.disable",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-users/{id}/disable",
+      "cli": "app-users disable",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.app-users.disable.request.v1",
+      "output_schema": "trestle.app-users.disable.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.app-users.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/app-users",
+      "cli": "app-users list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.app-users.list.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.access.request",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/access-request",
+      "cli": "app-auth request-access",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.appauth.access.request.request.v1",
+      "output_schema": "trestle.appauth.access.request.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.capability",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/auth/capability",
+      "cli": "app-auth capability",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.appauth.capability.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.invite.accept",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/invite/accept",
+      "cli": "app-auth accept-invite",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.appauth.invite.accept.request.v1",
+      "output_schema": "trestle.appauth.invite.accept.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.login",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/login",
+      "cli": "app-auth login",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.appauth.login.request.v1",
+      "output_schema": "trestle.appauth.login.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.logout",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/logout",
+      "cli": "app-auth logout",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.appauth.logout.request.v1",
+      "output_schema": "trestle.appauth.logout.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.refresh",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/refresh",
+      "cli": "app-auth refresh",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.appauth.refresh.request.v1",
+      "output_schema": "trestle.appauth.refresh.response.v1",
+      "tests": [
+        "internal/appauth/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.appauth.register",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/auth/register",
+      "cli": "app-auth register",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.appauth.register.request.v1",
+      "output_schema": "trestle.appauth.register.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.audit.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/audit",
+      "cli": "audit list",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "audit.read",
+      "output_schema": "trestle.audit.list.response.v1",
+      "tests": [
+        "internal/audit/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.backups.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/backups",
+      "cli": "backups create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.backups.create.request.v1",
+      "output_schema": "trestle.backups.create.response.v1",
+      "tests": [
+        "internal/backup/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.backups.get",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/backups/{id}",
+      "cli": "backups get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.backups.get.response.v1",
+      "tests": [
+        "internal/backup/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.backups.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/backups",
+      "cli": "backups list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.backups.list.response.v1",
+      "tests": [
+        "internal/backup/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.capabilities.read",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/capabilities",
+      "cli": "api capabilities",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.capabilities.read.response.v1",
+      "tests": [
+        "internal/apidocs/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.approve",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/joins/{id}/approve",
+      "cli": "cluster approve",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.approve.request.v1",
+      "output_schema": "trestle.cluster.approve.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.audit",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/audit",
+      "cli": "cluster audit",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.audit.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.collect",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/outbound/{id}/collect",
+      "cli": "cluster collect",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.collect.request.v1",
+      "output_schema": "trestle.cluster.collect.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.compare",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/compare",
+      "cli": "cluster compare",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.compare.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.identity",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/identity",
+      "cli": "cluster identity",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.identity.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.invite",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/invitations",
+      "cli": "cluster invite",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.invite.request.v1",
+      "output_schema": "trestle.cluster.invite.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.join",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/outbound",
+      "cli": "cluster join",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.join.request.v1",
+      "output_schema": "trestle.cluster.join.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.joins",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/joins",
+      "cli": "cluster joins",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.joins.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.member.disable",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/members/{id}/disable",
+      "cli": "cluster disable",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.member.disable.request.v1",
+      "output_schema": "trestle.cluster.member.disable.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.member.enable",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/members/{id}/enable",
+      "cli": "cluster enable",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.member.enable.request.v1",
+      "output_schema": "trestle.cluster.member.enable.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.member.remove",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/members/{id}/remove",
+      "cli": "cluster remove",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.member.remove.request.v1",
+      "output_schema": "trestle.cluster.member.remove.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.member.revoke",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/members/{id}/revoke",
+      "cli": "cluster revoke",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.member.revoke.request.v1",
+      "output_schema": "trestle.cluster.member.revoke.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.member.rotate",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/members/{id}/rotate",
+      "cli": "cluster rotate",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.member.rotate.request.v1",
+      "output_schema": "trestle.cluster.member.rotate.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.members",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/members",
+      "cli": "cluster members",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.members.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.outbound",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/outbound",
+      "cli": "cluster outbound",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.outbound.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.reject",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/joins/{id}/reject",
+      "cli": "cluster reject",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.reject.request.v1",
+      "output_schema": "trestle.cluster.reject.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.status",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/summary",
+      "cli": "cluster status",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.status.response.v1",
+      "tests": [
+        "internal/cluster/cluster_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.collections.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/collections",
+      "cli": "collections create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.collections.create.request.v1",
+      "output_schema": "trestle.collections.create.response.v1",
+      "tests": [
+        "internal/collections/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.collections.delete",
+      "website": true,
+      "method": "DELETE",
+      "route": "/admin/v1/collections/{name}",
+      "cli": "collections delete",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.collections.delete.request.v1",
+      "output_schema": "trestle.collections.delete.response.v1",
+      "tests": [
+        "internal/collections/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.collections.get",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/collections/{name}",
+      "cli": "collections get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.collections.get.response.v1",
+      "tests": [
+        "internal/collections/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.collections.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/collections",
+      "cli": "collections list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.collections.list.response.v1",
+      "tests": [
+        "internal/collections/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.collections.update",
+      "website": true,
+      "method": "PATCH",
+      "route": "/admin/v1/collections/{name}",
+      "cli": "collections update",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.collections.update.request.v1",
+      "output_schema": "trestle.collections.update.response.v1",
+      "tests": [
+        "internal/collections/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.credentials.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/credentials",
+      "cli": "credentials create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.credentials.create.request.v1",
+      "output_schema": "trestle.credentials.create.response.v1",
+      "tests": [
+        "internal/identities/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.credentials.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/credentials",
+      "cli": "credentials list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.credentials.list.response.v1",
+      "tests": [
+        "internal/identities/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.credentials.revoke",
+      "website": true,
+      "method": "DELETE",
+      "route": "/admin/v1/credentials/{id}",
+      "cli": "credentials revoke",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.credentials.revoke.request.v1",
+      "output_schema": "trestle.credentials.revoke.response.v1",
+      "tests": [
+        "internal/identities/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.database.setup.apply",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/database/setup",
+      "cli": "database setup",
+      "cli_observed": true,
+      "boundary": "public",
+      "input_schema": "trestle.database.setup.apply.request.v1",
+      "output_schema": "trestle.database.setup.apply.response.v1",
+      "tests": [
+        "internal/databasesetup/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.database.setup.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/database/setup",
+      "cli": "database setup-status",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.database.setup.read.response.v1",
+      "tests": [
+        "internal/databasesetup/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.deployment.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/deployment",
+      "cli": "deployment get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.deployment.read.response.v1",
+      "tests": [
+        "internal/deployment/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.events.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/events",
+      "cli": "events list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.events.list.response.v1",
+      "tests": [
+        "internal/events/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.export.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/export",
+      "cli": "data export",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.export.read.response.v1",
+      "tests": [
+        "internal/backup/portable_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.files.admin.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/files",
+      "cli": "admin-files list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.files.admin.list.response.v1",
+      "tests": [
+        "internal/files/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.files.cleanup",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/files/cleanup",
+      "cli": "admin-files cleanup",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.files.cleanup.request.v1",
+      "output_schema": "trestle.files.cleanup.response.v1",
+      "tests": [
+        "internal/files/deletion_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.files.delete",
+      "website": true,
+      "method": "DELETE",
+      "route": "/api/v1/files/{id}",
+      "cli": "files delete",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.files.delete.request.v1",
+      "output_schema": "trestle.files.delete.response.v1",
+      "tests": [
+        "internal/files/deletion_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.files.get",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/files/{id}",
+      "cli": "files get",
+      "cli_observed": true,
+      "boundary": "service",
+      "output_schema": "trestle.files.get.response.v1",
+      "tests": [
+        "internal/files/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.files.upload",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/files",
+      "cli": "files upload",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.files.upload.request.v1",
+      "output_schema": "trestle.files.upload.response.v1",
+      "tests": [
+        "internal/files/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.functions.action",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/functions/{id}",
+      "cli": "functions action",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.functions.action.request.v1",
+      "output_schema": "trestle.functions.action.response.v1",
+      "tests": [
+        "internal/functions/target_validation_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.functions.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/functions",
+      "cli": "functions create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.functions.create.request.v1",
+      "output_schema": "trestle.functions.create.response.v1",
+      "tests": [
+        "internal/functions/target_validation_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.functions.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/functions",
+      "cli": "functions list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.functions.list.response.v1",
+      "tests": [
+        "internal/functions/target_validation_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.import.dry-run",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/imports/dry-run",
+      "cli": "data import-dry-run",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.import.dry-run.response.v1",
+      "tests": [
+        "internal/backup/portable_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.jobs.action",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/jobs/{id}",
+      "cli": "jobs action",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.jobs.action.request.v1",
+      "output_schema": "trestle.jobs.action.response.v1",
+      "tests": [
+        "internal/jobs/retry_deadletter_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.jobs.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/jobs",
+      "cli": "jobs create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.jobs.create.request.v1",
+      "output_schema": "trestle.jobs.create.response.v1",
+      "tests": [
+        "internal/jobs/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.jobs.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/jobs",
+      "cli": "jobs list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.jobs.list.response.v1",
+      "tests": [
+        "internal/jobs/list_endpoint_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.launcher.config.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/api/launcher/config",
+      "cli": "launcher-config update",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "launcher.configure.all",
+      "input_schema": "trestle.launcher.config.update.request.v1",
+      "output_schema": "trestle.launcher.config.update.response.v1",
+      "tests": [
+        "internal/launcher/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.launcher.instances.list",
+      "website": true,
+      "method": "GET",
+      "route": "/api/launcher/instances",
+      "cli": "launcher-instances list",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.launcher.instances.list.response.v1",
+      "tests": [
+        "internal/launcher/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.openapi.read",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/openapi.json",
+      "cli": "api openapi",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.openapi.read.response.v1",
+      "tests": [
+        "internal/apidocs/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.operations.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/operations",
+      "cli": "operations get",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "audit.read",
+      "output_schema": "trestle.operations.read.response.v1",
+      "tests": [
+        "internal/audit/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.realtime.stream",
+      "website": false,
+      "method": "GET",
+      "route": "/api/v1/realtime",
+      "cli": "events stream",
+      "cli_observed": true,
+      "boundary": "service",
+      "output_schema": "trestle.realtime.stream.response.v1",
+      "tests": [
+        "internal/events/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.batch",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/collections/{collection}/records/batch",
+      "cli": "records batch",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.records.batch.request.v1",
+      "output_schema": "trestle.records.batch.response.v1",
+      "tests": [
+        "internal/records/rollback_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.create",
+      "website": true,
+      "method": "POST",
+      "route": "/api/v1/collections/{collection}/records",
+      "cli": "records create",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.records.create.request.v1",
+      "output_schema": "trestle.records.create.response.v1",
+      "tests": [
+        "internal/records/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.delete",
+      "website": true,
+      "method": "DELETE",
+      "route": "/api/v1/collections/{collection}/records/{id}",
+      "cli": "records delete",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.records.delete.request.v1",
+      "output_schema": "trestle.records.delete.response.v1",
+      "tests": [
+        "internal/records/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.get",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/collections/{collection}/records/{id}",
+      "cli": "records get",
+      "cli_observed": true,
+      "boundary": "service",
+      "output_schema": "trestle.records.get.response.v1",
+      "tests": [
+        "internal/records/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.list",
+      "website": true,
+      "method": "GET",
+      "route": "/api/v1/collections/{collection}/records",
+      "cli": "records list",
+      "cli_observed": true,
+      "boundary": "service",
+      "output_schema": "trestle.records.list.response.v1",
+      "tests": [
+        "internal/records/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.records.update",
+      "website": true,
+      "method": "PATCH",
+      "route": "/api/v1/collections/{collection}/records/{id}",
+      "cli": "records update",
+      "cli_observed": true,
+      "boundary": "service",
+      "input_schema": "trestle.records.update.request.v1",
+      "output_schema": "trestle.records.update.response.v1",
+      "tests": [
+        "internal/records/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.activation-url.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/app-registration/activation-base-url",
+      "cli": "registration activation-url",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.registration.activation-url.read.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.activation-url.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/admin/v1/app-registration/activation-base-url",
+      "cli": "registration set-activation-url",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.activation-url.update.request.v1",
+      "output_schema": "trestle.registration.activation-url.update.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.invitations.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-registration/invitations",
+      "cli": "invitations create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.invitations.create.request.v1",
+      "output_schema": "trestle.registration.invitations.create.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.invitations.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/app-registration/invitations",
+      "cli": "invitations list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.registration.invitations.list.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.invitations.revoke",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-registration/invitations/{id}/revoke",
+      "cli": "invitations revoke",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.invitations.revoke.request.v1",
+      "output_schema": "trestle.registration.invitations.revoke.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.policy.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/admin/v1/app-registration/policy",
+      "cli": "registration set-policy",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.policy.update.request.v1",
+      "output_schema": "trestle.registration.policy.update.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/app-registration",
+      "cli": "registration get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.registration.read.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.requests.approve",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-registration/requests/{id}/approve",
+      "cli": "access-requests approve",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.requests.approve.request.v1",
+      "output_schema": "trestle.registration.requests.approve.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.requests.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/app-registration/requests",
+      "cli": "access-requests list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.registration.requests.list.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.requests.reissue",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-registration/requests/{id}/reissue",
+      "cli": "access-requests reissue",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.requests.reissue.request.v1",
+      "output_schema": "trestle.registration.requests.reissue.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.registration.requests.reject",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/app-registration/requests/{id}/reject",
+      "cli": "access-requests reject",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.registration.requests.reject.request.v1",
+      "output_schema": "trestle.registration.requests.reject.response.v1",
+      "tests": [
+        "internal/appauth/registration_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.restores.preflight",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/restores/preflight",
+      "cli": "restores preflight",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.restores.preflight.response.v1",
+      "tests": [
+        "internal/backup/restore_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.rules.explain",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/collection-rules/{collection}/explain",
+      "cli": "rules explain",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.rules.explain.response.v1",
+      "tests": [
+        "internal/rules/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.rules.get",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/collection-rules/{collection}",
+      "cli": "rules get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.rules.get.response.v1",
+      "tests": [
+        "internal/rules/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.rules.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/admin/v1/collection-rules/{collection}",
+      "cli": "rules update",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.rules.update.request.v1",
+      "output_schema": "trestle.rules.update.response.v1",
+      "tests": [
+        "internal/rules/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.storage.status",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/storage/status",
+      "cli": "storage status",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.storage.status.response.v1",
+      "tests": [
+        "internal/files/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.support-bundle.read",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/support-bundle",
+      "cli": "support-bundle get",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.support-bundle.read.response.v1",
+      "tests": [
+        "internal/deployment/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.system.health",
+      "website": true,
+      "method": "GET",
+      "route": "/system/health",
+      "cli": "system health",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.system.health.response.v1",
+      "tests": [
+        "internal/server/server_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.system.ready",
+      "website": true,
+      "method": "GET",
+      "route": "/system/ready",
+      "cli": "system ready",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.system.ready.response.v1",
+      "tests": [
+        "internal/server/server_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.system.version",
+      "website": true,
+      "method": "GET",
+      "route": "/system/version",
+      "cli": "system version",
+      "cli_observed": true,
+      "boundary": "public",
+      "output_schema": "trestle.system.version.response.v1",
+      "tests": [
+        "internal/server/server_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.webhooks.action",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/webhooks/{id}",
+      "cli": "webhooks action",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.webhooks.action.request.v1",
+      "output_schema": "trestle.webhooks.action.response.v1",
+      "tests": [
+        "internal/webhooks/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.webhooks.create",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/webhooks",
+      "cli": "webhooks create",
+      "cli_observed": true,
+      "boundary": "session",
+      "input_schema": "trestle.webhooks.create.request.v1",
+      "output_schema": "trestle.webhooks.create.response.v1",
+      "tests": [
+        "internal/webhooks/handler_test.go"
+      ]
+    },
+    {
+      "operation": "trestle.webhooks.list",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/webhooks",
+      "cli": "webhooks list",
+      "cli_observed": true,
+      "boundary": "session",
+      "output_schema": "trestle.webhooks.list.response.v1",
+      "tests": [
+        "internal/webhooks/handler_test.go"
+      ]
+    }
+  ]
+}

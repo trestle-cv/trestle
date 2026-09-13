@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gantry-tools/gantry-core/automation"
+
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/apidocs"
 	"github.com/trestle-cv/trestle/internal/appauth"
@@ -32,6 +34,7 @@ import (
 	"github.com/trestle-cv/trestle/internal/identities"
 	"github.com/trestle-cv/trestle/internal/jobs"
 	"github.com/trestle-cv/trestle/internal/launcher"
+	"github.com/trestle-cv/trestle/internal/operations"
 	"github.com/trestle-cv/trestle/internal/records"
 	"github.com/trestle-cv/trestle/internal/rules"
 	"github.com/trestle-cv/trestle/internal/server"
@@ -71,8 +74,7 @@ func main() {
 	}
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") &&
 		os.Args[1] != "restore" && os.Args[1] != "migrate" {
-		fmt.Fprintln(os.Stderr, "trestle: unknown command", os.Args[1])
-		os.Exit(2)
+		os.Exit(automation.Run(os.Args[1:], operations.Contracts, automation.Options{Program: "trestle", DefaultURL: "http://127.0.0.1:7333", CookieName: "trestle_admin_session", CSRFHeader: "X-Trestle-CSRF", CSRFFields: []string{"csrfToken"}, SessionInfoPath: "/admin/v1/session"}))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "restore" {
 		set := flag.NewFlagSet("restore", flag.ContinueOnError)
