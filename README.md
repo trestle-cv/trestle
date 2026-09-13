@@ -47,8 +47,8 @@ Deployment and release automation are implemented. The stable public-preview
 label means the release establishes a normal, installable download channel; it
 is not a production-proven or battle-proven claim.
 
-The release line is 0.1.4: an ordinary build at the release commit reports
-version 0.1.4 (commit `unknown`), while release builds and the published v0.1.4
+The `main` development line is 0.1.5: an ordinary development build reports
+version 0.1.5 (commit `unknown`), while release builds and the published v0.1.4
 stable tag are unaffected. Release builds override the default via ldflags with
 the released version and commit. Installers and the public website always
 target the actual published release, never the development line.
@@ -406,7 +406,7 @@ arm64.
 ## Current safety boundary
 
 Trestle's stable public-preview line is the v0.1.x contract; the current
-published release is v0.1.4, and the release commit reports 0.1.4. The supported surfaces and explicit
+published release is v0.1.4, and the `main` development line is 0.1.5. The supported surfaces and explicit
 exclusions of the released contract are recorded in `STABILITY.md`. A stable
 public-preview release establishes the installable download channel and the
 initial public compatibility contract; it is not a production-proven or
