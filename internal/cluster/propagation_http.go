@@ -69,6 +69,13 @@ func (h *HTTPHandler) propagationAdmin(w http.ResponseWriter, r *http.Request, a
 	case r.Method == http.MethodGet && path == "/profiles":
 		v, e := h.Propagation.Profiles(r.Context())
 		write(w, v, e)
+	case r.Method == http.MethodPost && path == "/profiles/run-due":
+		v, e := h.RunDuePropagationProfiles(r.Context())
+		write(w, v, e)
+	case r.Method == http.MethodDelete && strings.HasPrefix(path, "/profiles/"):
+		id := strings.TrimPrefix(path, "/profiles/")
+		e := h.Propagation.DeleteProfile(r.Context(), id)
+		write(w, map[string]bool{"ok": e == nil}, e)
 	case r.Method == http.MethodPut && strings.HasPrefix(path, "/profiles/"):
 		var p core.Profile
 		if !decodeProp(w, r, &p) {
@@ -179,3 +186,38 @@ func (h *HTTPHandler) propagate(w http.ResponseWriter, r *http.Request, q propag
 }
 
 var _ = bytes.NewReader
+
+func (h *HTTPHandler) propagationMembers(ctx context.Context) ([]core.Member, error) {
+	members, err := h.Service.Members(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]core.Member, 0, len(members))
+	for _, m := range members {
+		out = append(out, core.Member{ID: m.NodeID, Capabilities: m.Capabilities, Enabled: m.State == "active"})
+	}
+	return out, nil
+}
+
+func (h *HTTPHandler) runPropagationProfile(ctx context.Context, p core.Profile) (core.ProfileRunResult, error) {
+	members, err := h.propagationMembers(ctx)
+	if err != nil {
+		return core.ProfileRunResult{ProfileID: p.ID}, err
+	}
+	return core.ExecuteProfile(ctx, p, core.Actor{Kind: "system", ID: "scheduler"}, core.ProfileExecutor{
+		Members: members,
+		Export:  h.Propagation.Export,
+		Preview: h.remotePreview,
+		Apply:   h.remoteApply,
+	})
+}
+
+// RunDuePropagationProfiles evaluates all persisted due profiles once. It is
+// exported so the service process can schedule reconciliation without routing
+// internal work through HTTP.
+func (h *HTTPHandler) RunDuePropagationProfiles(ctx context.Context) ([]core.ProfileRunResult, error) {
+	if h.Propagation == nil {
+		return nil, fmt.Errorf("propagation unavailable")
+	}
+	return h.Propagation.RunDueProfiles(ctx, h.runPropagationProfile)
+}

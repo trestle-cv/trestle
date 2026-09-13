@@ -566,6 +566,177 @@
       ]
     },
     {
+      "operation": "trestle.cluster.propagation.apply",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/propagation/apply",
+      "cli": "cluster-propagation apply",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.apply.request.v1",
+      "output_schema": "trestle.cluster.propagation.apply.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.export",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/propagation/export",
+      "cli": "cluster-propagation export",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.export.request.v1",
+      "output_schema": "trestle.cluster.propagation.export.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.history",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/propagation/history",
+      "cli": "cluster-propagation-history list",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.propagation.history.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.kinds",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/propagation/kinds",
+      "cli": "cluster-propagation kinds",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.propagation.kinds.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.preview",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/propagation/preview",
+      "cli": "cluster-propagation preview",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.propagation.preview.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.profile.delete",
+      "website": true,
+      "method": "DELETE",
+      "route": "/admin/v1/cluster/propagation/profiles/{id}",
+      "cli": "cluster-propagation-profiles delete",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.profile.delete.request.v1",
+      "output_schema": "trestle.cluster.propagation.profile.delete.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.profile.update",
+      "website": true,
+      "method": "PUT",
+      "route": "/admin/v1/cluster/propagation/profiles/{id}",
+      "cli": "cluster-propagation-profiles update",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.profile.update.request.v1",
+      "output_schema": "trestle.cluster.propagation.profile.update.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.profiles",
+      "website": true,
+      "method": "GET",
+      "route": "/admin/v1/cluster/propagation/profiles",
+      "cli": "cluster-propagation-profiles list",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "output_schema": "trestle.cluster.propagation.profiles.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.profiles.run-due",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/propagation/profiles/run-due",
+      "cli": "cluster-propagation-profiles run-due",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.profiles.run-due.request.v1",
+      "output_schema": "trestle.cluster.propagation.profiles.run-due.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.propagate",
+      "website": true,
+      "method": "POST",
+      "route": "/admin/v1/cluster/propagation/propagate",
+      "cli": "cluster-propagation propagate",
+      "cli_observed": true,
+      "boundary": "capability",
+      "permission": "cluster.manage",
+      "input_schema": "trestle.cluster.propagation.propagate.request.v1",
+      "output_schema": "trestle.cluster.propagation.propagate.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.rpc.apply",
+      "website": false,
+      "method": "POST",
+      "route": "/api/cluster/v1/rpc/propagation/apply",
+      "cli_observed": false,
+      "boundary": "service",
+      "input_schema": "trestle.cluster.propagation.rpc.apply.request.v1",
+      "output_schema": "trestle.cluster.propagation.rpc.apply.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
+      "operation": "trestle.cluster.propagation.rpc.preview",
+      "website": false,
+      "method": "POST",
+      "route": "/api/cluster/v1/rpc/propagation/preview",
+      "cli_observed": false,
+      "boundary": "service",
+      "output_schema": "trestle.cluster.propagation.rpc.preview.response.v1",
+      "tests": [
+        "internal/cluster/propagation_http.go"
+      ]
+    },
+    {
       "operation": "trestle.cluster.reject",
       "website": true,
       "method": "POST",

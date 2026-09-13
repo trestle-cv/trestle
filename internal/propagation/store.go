@@ -2,6 +2,7 @@ package propagation
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -26,9 +27,9 @@ func (s *StateStore) SaveProfile(ctx context.Context, p core.Profile) error {
 		return err
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
-	_, err = s.db.ExecContext(ctx, `INSERT INTO _trestle_propagation_profiles(id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled,created_at,updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,selector_json=excluded.selector_json,kinds_json=excluded.kinds_json,mode=excluded.mode,schedule=excluded.schedule,maintenance_window=excluded.maintenance_window,enabled=excluded.enabled,updated_at=excluded.updated_at`,
-		p.ID, p.Name, string(selector), string(kinds), string(p.Mode), p.Schedule, p.MaintenanceWindow, s.db.Dialect().Boolean(p.Enabled), now, now)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO _trestle_propagation_profiles(id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled,last_run_at,created_at,updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,selector_json=excluded.selector_json,kinds_json=excluded.kinds_json,mode=excluded.mode,schedule=excluded.schedule,maintenance_window=excluded.maintenance_window,enabled=excluded.enabled,last_run_at=excluded.last_run_at,updated_at=excluded.updated_at`,
+		p.ID, p.Name, string(selector), string(kinds), string(p.Mode), p.Schedule, p.MaintenanceWindow, s.db.Dialect().Boolean(p.Enabled), nullableTime(p.LastRunAt), now, now)
 	return err
 }
 func (s *StateStore) DeleteProfile(ctx context.Context, id string) error {
@@ -36,7 +37,7 @@ func (s *StateStore) DeleteProfile(ctx context.Context, id string) error {
 	return err
 }
 func (s *StateStore) ListProfiles(ctx context.Context) ([]core.Profile, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled FROM _trestle_propagation_profiles ORDER BY name,id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled,last_run_at FROM _trestle_propagation_profiles ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,8 @@ func (s *StateStore) ListProfiles(ctx context.Context) ([]core.Profile, error) {
 		var p core.Profile
 		var sel, kinds string
 		var enabled any
-		if err := rows.Scan(&p.ID, &p.Name, &sel, &kinds, &p.Mode, &p.Schedule, &p.MaintenanceWindow, &enabled); err != nil {
+		var last sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &sel, &kinds, &p.Mode, &p.Schedule, &p.MaintenanceWindow, &enabled, &last); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal([]byte(sel), &p.Selector); err != nil {
@@ -58,6 +60,11 @@ func (s *StateStore) ListProfiles(ctx context.Context) ([]core.Profile, error) {
 		p.Enabled, err = s.db.Dialect().DecodeBoolean(enabled)
 		if err != nil {
 			return nil, err
+		}
+		if last.Valid {
+			if parsed, e := time.Parse(time.RFC3339Nano, last.String); e == nil {
+				p.LastRunAt = &parsed
+			}
 		}
 		out = append(out, p)
 	}
@@ -90,3 +97,10 @@ func (s *StateStore) ListHistory(ctx context.Context, limit int) ([]core.History
 }
 
 var _ core.StateStore = (*StateStore)(nil)
+
+func nullableTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}

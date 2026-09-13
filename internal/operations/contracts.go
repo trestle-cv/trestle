@@ -123,6 +123,16 @@ func prepareSpecs() {
 		sp("trestle.cluster.audit", "GET", "/admin/v1/cluster/audit", "cluster", "audit", operation.Read, operation.Capability, "internal/cluster/cluster_test.go"),
 		sp("trestle.cluster.status", "GET", "/admin/v1/cluster/summary", "cluster", "status", operation.Read, operation.Capability, "internal/cluster/cluster_test.go"),
 		sp("trestle.cluster.compare", "GET", "/admin/v1/cluster/compare", "cluster", "compare", operation.Read, operation.Capability, "internal/cluster/cluster_test.go"),
+		sp("trestle.cluster.propagation.kinds", "GET", "/admin/v1/cluster/propagation/kinds", "cluster-propagation", "kinds", operation.Read, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.export", "POST", "/admin/v1/cluster/propagation/export", "cluster-propagation", "export", operation.Mutation, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.preview", "POST", "/admin/v1/cluster/propagation/preview", "cluster-propagation", "preview", operation.Read, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.apply", "POST", "/admin/v1/cluster/propagation/apply", "cluster-propagation", "apply", operation.Mutation, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.propagate", "POST", "/admin/v1/cluster/propagation/propagate", "cluster-propagation", "propagate", operation.Mutation, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.history", "GET", "/admin/v1/cluster/propagation/history", "cluster-propagation-history", "list", operation.Read, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.profiles", "GET", "/admin/v1/cluster/propagation/profiles", "cluster-propagation-profiles", "list", operation.Read, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.profile.update", "PUT", "/admin/v1/cluster/propagation/profiles/{id}", "cluster-propagation-profiles", "update", operation.Mutation, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.profile.delete", "DELETE", "/admin/v1/cluster/propagation/profiles/{id}", "cluster-propagation-profiles", "delete", operation.Destructive, operation.Capability, "internal/cluster/propagation_http.go"),
+		sp("trestle.cluster.propagation.profiles.run-due", "POST", "/admin/v1/cluster/propagation/profiles/run-due", "cluster-propagation-profiles", "run-due", operation.Mutation, operation.Capability, "internal/cluster/propagation_http.go"),
 	}
 	for _, action := range []string{"enable", "disable", "rotate", "revoke", "remove"} {
 		kind := operation.Mutation
@@ -132,6 +142,10 @@ func prepareSpecs() {
 		cluster = append(cluster, sp("trestle.cluster.member."+action, "POST", "/admin/v1/cluster/members/{id}/"+action, "cluster", action, kind, operation.Capability, "internal/cluster/cluster_test.go"))
 	}
 	specs = append(specs, cluster...)
+	specs = append(specs,
+		spec{id: "trestle.cluster.propagation.rpc.preview", method: "POST", path: "/api/cluster/v1/rpc/propagation/preview", kind: operation.Read, boundary: operation.Service, test: "internal/cluster/propagation_http.go", automation: operation.ServiceProtocol, website: false},
+		spec{id: "trestle.cluster.propagation.rpc.apply", method: "POST", path: "/api/cluster/v1/rpc/propagation/apply", kind: operation.Mutation, boundary: operation.Service, test: "internal/cluster/propagation_http.go", automation: operation.ServiceProtocol, website: false},
+	)
 	for i := range specs {
 		if specs[i].boundary == operation.Capability && specs[i].capability == "" {
 			specs[i].capability = "admin.manage"

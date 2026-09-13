@@ -289,6 +289,27 @@ func main() {
 	defer stop()
 	jobAPI.Start(ctx)
 	go fileAPI.RunDeletionRecovery(ctx, 5*time.Minute)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				results, runErr := clusterHandler.RunDuePropagationProfiles(ctx)
+				if runErr != nil {
+					logger.Warn("propagation reconciliation failed", "error", runErr)
+					continue
+				}
+				for _, result := range results {
+					if result.Error != "" || result.Failed > 0 {
+						logger.Warn("propagation profile run incomplete", "profile", result.ProfileID, "action", result.Action, "drift", result.Drift, "failed", result.Failed, "error", result.Error)
+					}
+				}
+			}
+		}
+	}()
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("server starting", "listen", cfg.Listen, "data_dir", cfg.DataDir, "trusted_proxy_count", len(cfg.TrustedProxies), "read_header_timeout", cfg.ReadHeaderTimeout, "read_timeout", cfg.ReadTimeout, "idle_timeout", cfg.IdleTimeout, "max_header_bytes", cfg.MaxHeaderBytes)
