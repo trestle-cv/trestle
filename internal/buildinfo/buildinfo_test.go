@@ -18,8 +18,8 @@ func TestCurrentHasDevelopmentIdentity(t *testing.T) {
 // development version rather than accepting any non-empty value.
 func TestCurrentDevelopmentVersionIsNextPatch(t *testing.T) {
 	info := Current()
-	if info.Version != "0.1.5" {
-		t.Fatalf("development build reports %q; want the next patch version 0.1.5", info.Version)
+	if info.Version != "0.1.4" {
+		t.Fatalf("development build reports %q; want the next patch version 0.1.4", info.Version)
 	}
 	if info.Commit != "unknown" {
 		t.Fatalf("development build unexpectedly reports a release commit: %q", info.Commit)
