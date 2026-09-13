@@ -429,4 +429,4 @@ Start with:
 
 ## Headless administration
 
-Use `trestle setup --email-file FILE --password-file FILE`, `trestle config show --json`, and the backup, restore, migrate and service commands for automation. Stop the service before `trestle reset --auth` or `trestle reset --all`; confirmation is the exact phrase `TRESTLE AUTH` or `TRESTLE ALL`. SQLite resets retain timestamped backups. PostgreSQL resets fail closed and require a database-native backup/reset workflow.
+Use `trestle setup --email-file FILE --password-file FILE`, `trestle config show --json`, and the backup, restore, migrate and service commands for automation. Stop the service before `sudo trestle reset --auth` or `sudo trestle reset --all`; reset automatically uses the data directory recorded in a valid installed service unit. Use `--data-dir DIR` or `TRESTLE_DATA_DIR` for a development instance. Confirmation is the exact phrase `TRESTLE AUTH` or `TRESTLE ALL`. SQLite resets retain timestamped backups. PostgreSQL resets fail closed and require a database-native backup/reset workflow.

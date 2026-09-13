@@ -22,6 +22,29 @@ type fakeResult struct {
 	err  error
 }
 
+func TestInstalledDataDirUsesOnlyManagedUnit(t *testing.T) {
+	oldUnitPath := UnitPath
+	UnitPath = filepath.Join(t.TempDir(), "trestle.service")
+	t.Cleanup(func() { UnitPath = oldUnitPath })
+
+	if dir, installed, err := InstalledDataDir(); err != nil || installed || dir != "" {
+		t.Fatalf("absent unit = (%q, %v, %v), want (empty, false, nil)", dir, installed, err)
+	}
+	want := "/srv/trestle-data"
+	if err := os.WriteFile(UnitPath, []byte(Unit(want, "127.0.0.1:7333", "")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if dir, installed, err := InstalledDataDir(); err != nil || !installed || dir != want {
+		t.Fatalf("managed unit = (%q, %v, %v), want (%q, true, nil)", dir, installed, err, want)
+	}
+	if err := os.WriteFile(UnitPath, []byte("[Service]\nExecStart=/tmp/trestle\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := InstalledDataDir(); err == nil {
+		t.Fatal("foreign unit did not fail closed")
+	}
+}
+
 type fakeRunner struct {
 	script map[string]fakeResult
 	log    []string

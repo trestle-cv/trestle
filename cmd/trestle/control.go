@@ -14,8 +14,11 @@ import (
 
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/config"
+	"github.com/trestle-cv/trestle/internal/service"
 	"github.com/trestle-cv/trestle/internal/store"
 )
+
+var resetInstalledDataDir = service.InstalledDataDir
 
 func runSetup(args []string) int {
 	fs := flag.NewFlagSet("trestle setup", flag.ContinueOnError)
@@ -96,12 +99,28 @@ func runReset(args []string) int {
 	fs.SetOutput(io.Discard)
 	auth := fs.Bool("auth", false, "reset authentication state")
 	all := fs.Bool("all", false, "reset all Trestle state")
+	dataDir := fs.String("data-dir", "", "Trestle data directory (defaults to installed service data or ./data)")
 	confirm := fs.String("confirm", "", "non-interactive confirmation")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*auth == *all) {
-		fmt.Fprintln(os.Stderr, "usage: trestle reset (--auth|--all) [--confirm 'TRESTLE AUTH|TRESTLE ALL']")
+		fmt.Fprintln(os.Stderr, "usage: trestle reset (--auth|--all) [--data-dir DIR] [--confirm 'TRESTLE AUTH|TRESTLE ALL']")
 		return 2
 	}
-	cfg, err := config.FromOS(nil)
+	resolvedDataDir := strings.TrimSpace(*dataDir)
+	if resolvedDataDir == "" && strings.TrimSpace(os.Getenv("TRESTLE_DATA_DIR")) == "" {
+		installedDataDir, installed, installedErr := resetInstalledDataDir()
+		if installedErr != nil {
+			fmt.Fprintln(os.Stderr, "trestle:", installedErr)
+			return 1
+		}
+		if installed {
+			resolvedDataDir = installedDataDir
+		}
+	}
+	configArgs := []string(nil)
+	if resolvedDataDir != "" {
+		configArgs = []string{"--data-dir", resolvedDataDir}
+	}
+	cfg, err := config.FromOS(configArgs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trestle:", err)
 		return 1
@@ -121,14 +140,31 @@ func runReset(args []string) int {
 	}
 	stamp := time.Now().UTC().Format("20060102T150405Z")
 	if *all {
-		if _, err = os.Stat(cfg.DataDir); os.IsNotExist(err) {
+		info, statErr := os.Stat(cfg.DataDir)
+		if os.IsNotExist(statErr) {
 			return 0
 		}
-		if err = os.Rename(cfg.DataDir, cfg.DataDir+".reset-"+stamp); err != nil {
+		if statErr != nil {
+			fmt.Fprintln(os.Stderr, "trestle:", statErr)
+			return 1
+		}
+		backupDir := cfg.DataDir + ".reset-" + stamp
+		if err = os.Rename(cfg.DataDir, backupDir); err != nil {
 			fmt.Fprintln(os.Stderr, "trestle:", err)
 			return 1
 		}
 		if err = os.MkdirAll(cfg.DataDir, 0700); err != nil {
+			_ = os.Rename(backupDir, cfg.DataDir)
+			fmt.Fprintln(os.Stderr, "trestle:", err)
+			return 1
+		}
+		if err = preserveResetDirectoryOwner(cfg.DataDir, info); err != nil {
+			removeErr := os.Remove(cfg.DataDir)
+			restoreErr := os.Rename(backupDir, cfg.DataDir)
+			if removeErr != nil || restoreErr != nil {
+				fmt.Fprintf(os.Stderr, "trestle: preserve reset directory owner: %v (rollback remove: %v; restore: %v)\n", err, removeErr, restoreErr)
+				return 1
+			}
 			fmt.Fprintln(os.Stderr, "trestle:", err)
 			return 1
 		}
@@ -167,7 +203,7 @@ func runReset(args []string) int {
 			return 1
 		}
 	}
-	fmt.Printf("Trestle %s reset complete. A timestamped backup was retained.\n", strings.ToLower(mode))
+	fmt.Printf("Trestle %s reset complete for %s. A timestamped backup was retained.\n", strings.ToLower(mode), cfg.DataDir)
 	return 0
 }
 

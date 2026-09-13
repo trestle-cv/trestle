@@ -293,6 +293,24 @@ func readManagedUnitFile(path string) (unitMeta, error) {
 	return readManagedUnit(string(data))
 }
 
+// InstalledDataDir returns the data directory recorded by the authenticated
+// managed service unit. The boolean is false when Trestle is not installed.
+// A present but foreign, malformed, or modified unit is an error so callers
+// never silently operate on a fallback directory.
+func InstalledDataDir() (string, bool, error) {
+	meta, err := readManagedUnitFile(UnitPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("cannot use installed service configuration: %w", err)
+	}
+	if err := validateReadWritePath(meta.data); err != nil {
+		return "", false, fmt.Errorf("installed service data directory: %w", err)
+	}
+	return meta.data, true, nil
+}
+
 func readManagedUnit(content string) (unitMeta, error) {
 	lines := strings.Split(content, "\n")
 	if len(lines) < 3 || lines[0] != trestleUnitMarker {
