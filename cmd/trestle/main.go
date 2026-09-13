@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gantry-tools/gantry-core/automation"
+	coreprop "github.com/gantry-tools/gantry-core/propagation"
 
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/apidocs"
@@ -35,6 +36,7 @@ import (
 	"github.com/trestle-cv/trestle/internal/jobs"
 	"github.com/trestle-cv/trestle/internal/launcher"
 	"github.com/trestle-cv/trestle/internal/operations"
+	productprop "github.com/trestle-cv/trestle/internal/propagation"
 	"github.com/trestle-cv/trestle/internal/records"
 	"github.com/trestle-cv/trestle/internal/rules"
 	"github.com/trestle-cv/trestle/internal/server"
@@ -239,7 +241,8 @@ func main() {
 	adminRoutes := http.NewServeMux()
 	clusterService := clusterapi.New(database.DB())
 	clusterTransport := clusterapi.NewTransport(database.DB(), clusterService, nil)
-	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version}
+	propagationManager := &coreprop.Manager{Adapter: productprop.New(database.DB()), Store: productprop.NewStateStore(database.DB())}
+	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version, Propagation: propagationManager}
 	adminRoutes.Handle("/admin/v1/cluster/", clusterHandler)
 	apiRoutes.Handle("/api/cluster/v1/", clusterHandler)
 	databaseSetup := databasesetup.New(admin, databasesetup.Options{DataDir: cfg.DataDir, Current: database.Provider(), Explicit: cfg.DatabaseExplicit || cfg.DatabaseConfigured, MaxOpen: cfg.DatabaseMaxOpen, MaxIdle: cfg.DatabaseMaxIdle, ConnectTimeout: cfg.DatabaseConnectTimeout, ConnMaxLifetime: cfg.DatabaseConnMaxLifetime})

@@ -6,14 +6,16 @@ import (
 	"strings"
 
 	core "github.com/gantry-tools/gantry-core/cluster"
+	coreprop "github.com/gantry-tools/gantry-core/propagation"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 )
 
 type HTTPHandler struct {
-	Service   *Service
-	Transport *Transport
-	Auth      *adminauth.Handler
-	Version   string
+	Service     *Service
+	Transport   *Transport
+	Auth        *adminauth.Handler
+	Version     string
+	Propagation *coreprop.Manager
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -142,11 +144,17 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.aggregateSummary(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/admin/v1/cluster/compare":
 		h.aggregateCompare(w, r)
+	case strings.HasPrefix(r.URL.Path, "/admin/v1/cluster/propagation"):
+		h.propagationAdmin(w, r, principal.AdminID)
 	default:
 		http.NotFound(w, r)
 	}
 }
 func (h *HTTPHandler) rpc(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.URL.Path, "/propagation/") {
+		h.propagationRPC(w, r)
+		return
+	}
 	cap := "cluster.trestle.summary"
 	if strings.HasSuffix(r.URL.Path, "/compare") {
 		cap = "cluster.trestle.compare"
