@@ -166,6 +166,14 @@ func TestBootstrapSchemaIntegrity(t *testing.T) {
 		"_trestle_roles":                   true,
 		"_trestle_admin_roles":             true,
 		"_trestle_launcher_instances":      true,
+		"_trestle_cluster_identity":        true,
+		"_trestle_cluster_members":         true,
+		"_trestle_cluster_invitations":     true,
+		"_trestle_cluster_nonces":          true,
+		"_trestle_cluster_join_requests":   true,
+		"_trestle_cluster_outbound_joins":  true,
+		"_trestle_propagation_profiles":    true,
+		"_trestle_propagation_history":     true,
 	}
 	expectedIndexes := map[string]bool{
 		"_trestle_admin_sessions_admin":              true,
@@ -178,6 +186,8 @@ func TestBootstrapSchemaIntegrity(t *testing.T) {
 		"_trestle_jobs_claim":                        true,
 		"_trestle_app_invitations_email":             true,
 		"_trestle_app_access_requests_pending_email": true,
+		"_trestle_cluster_nonces_seen":               true,
+		"_trestle_propagation_history_created":       true,
 	}
 
 	for _, provider := range []Provider{SQLite, Postgres} {

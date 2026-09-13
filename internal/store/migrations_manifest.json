@@ -3,7 +3,7 @@
   "lineageVersion": 1,
   "description": "Frozen pre-preview migration lineage. Append-only: retained versions must never be edited; new migrations may only be appended and the manifest regenerated.",
   "normalization": "strip CR; split into lines; trim each line; drop blank lines; join with a single newline; append a trailing newline",
-  "finalVersion": 20,
+  "finalVersion": 22,
   "migrations": [
     {
       "version": 1,
@@ -124,6 +124,18 @@
       "name": "cluster pairing lifecycle",
       "sqliteSha256": "25708e5b8ee4689e8ef0570ebc5bbdc02c745320d6ca33a301374a880aa7e0b8",
       "postgresSha256": "0587d4369348c97887575bca6aa13e5e354db7fceb3bc052b142cfc97609e291"
+    },
+    {
+      "version": 21,
+      "name": "propagation profiles and history",
+      "sqliteSha256": "ee9c03c1a19e0b9f76e76dd14e817ec0302dc62e80a1c0eb51f4830a062a5181",
+      "postgresSha256": "04ea3f452805df190d78fb16dabc09c62f52de1415a2478ab4ce65d27510a75c"
+    },
+    {
+      "version": 22,
+      "name": "propagation scheduling state",
+      "sqliteSha256": "d76589a990a93f06c4aa4082afe03d70cc4538720e559497fcfa7a10dbf40260",
+      "postgresSha256": "d76589a990a93f06c4aa4082afe03d70cc4538720e559497fcfa7a10dbf40260"
     }
   ]
 }
