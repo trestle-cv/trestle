@@ -16,7 +16,6 @@ var policies = map[string]KindPolicy{
 	"project-setting":     {Kind: "project-setting", Reversible: true, Permission: "settings.update"},
 	"schema":              {Kind: "schema", Reversible: true, Permission: "collections.update"},
 	"access-policy":       {Kind: "access-policy", Reversible: true, Permission: "roles.update"},
-	"job-definition":      {Kind: "job-definition", Reversible: true, Permission: "jobs.update"},
 	"webhook-definition":  {Kind: "webhook-definition", Reversible: true, Permission: "webhooks.update"},
 	"function-definition": {Kind: "function-definition", Reversible: true, Permission: "functions.update"},
 }
@@ -33,5 +32,5 @@ func ValidateEnvelope(e core.Envelope) error {
 	return e.Validate()
 }
 func Kinds() []string {
-	return []string{"access-policy", "function-definition", "job-definition", "project-setting", "schema", "webhook-definition"}
+	return []string{"access-policy", "function-definition", "project-setting", "schema", "webhook-definition"}
 }
