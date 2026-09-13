@@ -4,7 +4,7 @@ import "runtime"
 
 // These values are overridden with -ldflags in release builds.
 var (
-	version = "0.1.4"
+	version = "0.1.5"
 	commit  = "unknown"
 	date    = "unknown"
 )
