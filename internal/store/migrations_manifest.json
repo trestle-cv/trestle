@@ -3,7 +3,7 @@
   "lineageVersion": 1,
   "description": "Frozen pre-preview migration lineage. Append-only: retained versions must never be edited; new migrations may only be appended and the manifest regenerated.",
   "normalization": "strip CR; split into lines; trim each line; drop blank lines; join with a single newline; append a trailing newline",
-  "finalVersion": 17,
+  "finalVersion": 18,
   "migrations": [
     {
       "version": 1,
@@ -106,6 +106,12 @@
       "name": "embedded instance launcher",
       "sqliteSha256": "414cf36042d0888aa0872ff4da94ec27df41879d309da3cd88b5b49718b274fd",
       "postgresSha256": "096bc93d63689e4d8881077e23f0d42db62f2069d9382e73e78b6c989e6f98c4"
+    },
+    {
+      "version": 18,
+      "name": "gantry cluster membership",
+      "sqliteSha256": "29a1ce94e461bc90b668cc9c1dd27dcf02ff7c0ffa9ec9f0ba773b4580462391",
+      "postgresSha256": "f54c67b09f4d1179d3418a8a067675179f800c3add5c1184dda9ab790ecd114a"
     }
   ]
 }
