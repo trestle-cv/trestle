@@ -37,7 +37,7 @@ Development from v0.1.3 uses `github.com/trestle-cv/trestle`.
   URLs; `install.sh`, `download.sh` and `update.sh` now default to the
   `trestle-cv` release channel.
 
-Trestle v0.1.2 is the current stable public-preview release: checkpoints CP00-CP22 and all
+Trestle v0.1.4 is the current stable public-preview release: checkpoints CP00-CP22 and all
 ten CP23 hardening campaigns are implemented,
 covering the process and SQLite foundation, embedded administration, typed
 collections and records, authentication and access rules, local and
@@ -47,8 +47,8 @@ Deployment and release automation are implemented. The stable public-preview
 label means the release establishes a normal, installable download channel; it
 is not a production-proven or battle-proven claim.
 
-The `main` development line is 0.1.3: an ordinary development build reports
-version 0.1.3 (commit `unknown`), while the published v0.1.2 release and its
+The release line is 0.1.4: an ordinary build at the release commit reports
+version 0.1.4 (commit `unknown`), while release builds and the published v0.1.4
 stable tag are unaffected. Release builds override the default via ldflags with
 the released version and commit. Installers and the public website always
 target the actual published release, never the development line.
@@ -265,7 +265,7 @@ curl -fsSL https://trestle.cv/download.sh | sh
 to overwrite an existing file:
 
 ```sh
-curl -fsSL https://trestle.cv/download.sh | sh -s -- --version v0.1.2
+curl -fsSL https://trestle.cv/download.sh | sh -s -- --version v0.1.4
 curl -fsSL https://trestle.cv/download.sh | sh -s -- --output ./some-name
 ```
 
@@ -406,8 +406,7 @@ arm64.
 ## Current safety boundary
 
 Trestle's stable public-preview line is the v0.1.x contract; the current
-published release is v0.1.2 (commit `91c644139c40d48d8f48b2a6bd805c3747ff9da7`),
-and the `main` development line is 0.1.3. The supported surfaces and explicit
+published release is v0.1.4, and the release commit reports 0.1.4. The supported surfaces and explicit
 exclusions of the released contract are recorded in `STABILITY.md`. A stable
 public-preview release establishes the installable download channel and the
 initial public compatibility contract; it is not a production-proven or

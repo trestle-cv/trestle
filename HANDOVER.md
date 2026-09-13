@@ -211,11 +211,9 @@ change them.
 
 ## Current release state
 
-- Released: **v0.1.3** (stable public preview), annotated tag at commit
-  `7f59ea42eb68629f6277b52ba82064849728883f`. Release, read-only rehearsal and
-  verification, website deployment and public dogfood (clean-host install of
-  `v0.1.3`) are complete. The migration to module identity
-  `github.com/trestle-cv/trestle` takes effect with this release.
+- Released: **v0.1.4** (stable public preview). The canonical Gantry account
+  model, headless setup, confirmed reset commands, and installed-service reset
+  targeting are included in this release.
 - Development: **0.1.4** on `main`. An ordinary development build reports
   0.1.4 with commit `unknown`; release builds override the default via ldflags
   and are never confused with the development identity.
