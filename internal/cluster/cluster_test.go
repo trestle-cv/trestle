@@ -166,3 +166,98 @@ func TestSignedTransportBetweenNodes(t *testing.T) {
 		t.Fatalf("node=%s want=%s", got.NodeID, bi.NodeID)
 	}
 }
+
+func TestJoinApproveCollectLifecycle(t *testing.T) {
+	_, host := openTest(t)
+	_, joiner := openTest(t)
+	ctx := context.Background()
+	hostID, err := host.UpdateIdentity(ctx, "host", "https://host.example", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinID, err := joiner.UpdateIdentity(ctx, "joiner", "https://joiner.example", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, err := host.Invite(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localInbound, _ := core.NewSecret(32)
+	receipt, err := host.SubmitJoin(ctx, JoinSubmission{InvitationToken: token, Identity: joinID, CredentialForHost: localInbound})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.SubmitJoin(ctx, JoinSubmission{InvitationToken: token, Identity: joinID, CredentialForHost: localInbound}); err == nil {
+		t.Fatal("invitation replay accepted")
+	}
+	pending, err := host.PendingJoins(ctx)
+	if err != nil || len(pending) != 1 || pending[0].Fingerprint == "" {
+		t.Fatalf("pending=%v err=%v", pending, err)
+	}
+	if err := host.DecideJoin(ctx, receipt.RequestID, true); err != nil {
+		t.Fatal(err)
+	}
+	result, err := host.PollJoin(ctx, receipt.RequestID, receipt.RequestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != core.PairingApproved || result.Remote == nil || result.Remote.NodeID != hostID.NodeID || result.Credential == "" {
+		t.Fatalf("result=%+v", result)
+	}
+	if err := joiner.AcceptRemote(ctx, *result.Remote, result.Credential, localInbound); err != nil {
+		t.Fatal(err)
+	}
+	again, err := host.PollJoin(ctx, receipt.RequestID, receipt.RequestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.State != core.PairingUsed || again.Credential != "" {
+		t.Fatal("pairing result replay exposed credential")
+	}
+	hm, _ := host.Members(ctx)
+	jm, _ := joiner.Members(ctx)
+	if len(hm) != 1 || hm[0].NodeID != joinID.NodeID || len(jm) != 1 || jm[0].NodeID != hostID.NodeID {
+		t.Fatalf("host=%+v joiner=%+v", hm, jm)
+	}
+}
+
+func TestCompatibleProductVersionsAndStandaloneRemoval(t *testing.T) {
+	_, a := openTest(t)
+	_, b := openTest(t)
+	ctx := context.Background()
+	ai, err := a.UpdateIdentity(ctx, "a", "https://a.example", "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bi, err := b.UpdateIdentity(ctx, "b", "https://b.example", "1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, _ := core.NewSecret(32)
+	y, _ := core.NewSecret(32)
+	if err := a.AddMember(ctx, bi, x, y); err != nil {
+		t.Fatalf("compatible rolling version rejected: %v", err)
+	}
+	bad := bi
+	bad.NodeID = "bad_protocol"
+	bad.InstallationID = "bad_install"
+	bad.ProtocolVersion = ProtocolVersion + 1
+	if err := a.AddMember(ctx, bad, x, y); err == nil {
+		t.Fatal("incompatible protocol accepted")
+	}
+	if err := a.Revoke(ctx, bi.NodeID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Remove(ctx, bi.NodeID); err != nil {
+		t.Fatal(err)
+	}
+	members, err := a.Members(ctx)
+	if err != nil || len(members) != 0 {
+		t.Fatalf("standalone members=%v err=%v", members, err)
+	}
+	local, err := a.LocalSummary(ctx)
+	if err != nil || local.NodeID != ai.NodeID {
+		t.Fatalf("standalone summary=%+v err=%v", local, err)
+	}
+}

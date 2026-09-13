@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CurrentVersion = 19
+const CurrentVersion = 20
 
 type Store struct {
 	db                    *sql.DB
@@ -374,6 +374,17 @@ CREATE TABLE _trestle_cluster_nonces (
   PRIMARY KEY(node_id,nonce)
 ) STRICT;
 CREATE INDEX _trestle_cluster_nonces_seen ON _trestle_cluster_nonces(seen_at);
+`}, {20, "cluster pairing lifecycle", `
+CREATE TABLE _trestle_cluster_join_requests (
+  id TEXT PRIMARY KEY, request_secret_hash BLOB NOT NULL UNIQUE, invitation_id TEXT NOT NULL REFERENCES _trestle_cluster_invitations(id),
+  node_id TEXT NOT NULL, installation_id TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', public_endpoint TEXT NOT NULL,
+  public_key BLOB NOT NULL, capabilities_json TEXT NOT NULL DEFAULT '[]', protocol_version INTEGER NOT NULL, product_version TEXT NOT NULL DEFAULT '',
+  credential_for_local TEXT NOT NULL, state TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT, response_consumed_at TEXT
+) STRICT;
+CREATE TABLE _trestle_cluster_outbound_joins (
+  id TEXT PRIMARY KEY, remote_url TEXT NOT NULL, request_id TEXT NOT NULL, request_secret TEXT NOT NULL,
+  local_inbound_credential TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_error TEXT NOT NULL DEFAULT ''
+) STRICT;
 `}}
 
 func Open(ctx context.Context, dataDir string) (*Store, error) {

@@ -112,12 +112,12 @@ type RemoteReader struct{ Transport *Transport }
 
 func (r RemoteReader) Summary(ctx context.Context, nodeID string) (Summary, error) {
 	var v Summary
-	err := r.get(ctx, nodeID, "/admin/v1/cluster/rpc/summary", "cluster.trestle.summary", &v)
+	err := r.get(ctx, nodeID, "/api/cluster/v1/rpc/summary", "cluster.trestle.summary", &v)
 	return v, err
 }
 func (r RemoteReader) Comparison(ctx context.Context, nodeID string) (Comparison, error) {
 	var v Comparison
-	err := r.get(ctx, nodeID, "/admin/v1/cluster/rpc/compare", "cluster.trestle.compare", &v)
+	err := r.get(ctx, nodeID, "/api/cluster/v1/rpc/compare", "cluster.trestle.compare", &v)
 	return v, err
 }
 func (r RemoteReader) get(ctx context.Context, nodeID, path, capability string, out any) error {

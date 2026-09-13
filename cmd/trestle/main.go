@@ -50,6 +50,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "service" {
 		os.Exit(runService(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "cluster" {
+		os.Exit(runCluster(os.Args[2:]))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "reset" {
 		os.Exit(runReset(os.Args[2:]))
 	}
@@ -236,6 +239,7 @@ func main() {
 	clusterTransport := clusterapi.NewTransport(database.DB(), clusterService, nil)
 	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version}
 	adminRoutes.Handle("/admin/v1/cluster/", clusterHandler)
+	apiRoutes.Handle("/api/cluster/v1/", clusterHandler)
 	databaseSetup := databasesetup.New(admin, databasesetup.Options{DataDir: cfg.DataDir, Current: database.Provider(), Explicit: cfg.DatabaseExplicit || cfg.DatabaseConfigured, MaxOpen: cfg.DatabaseMaxOpen, MaxIdle: cfg.DatabaseMaxIdle, ConnectTimeout: cfg.DatabaseConnectTimeout, ConnMaxLifetime: cfg.DatabaseConnMaxLifetime})
 	adminRoutes.Handle("/admin/v1/database/setup", databaseSetup)
 	adminRoutes.Handle("/admin/v1/collections", collectionAdmin)
