@@ -5,7 +5,7 @@
   "campaign": "public-preview",
   "provider": "postgres",
   "status": "implemented",
-  "currentSchemaVersion": 17,
+  "currentSchemaVersion": 22,
   "driver": "github.com/lib/pq",
   "supportedServerVersions": [
     16,
@@ -75,7 +75,7 @@
     "databaseIdentity": "one provider per instance; the provider cannot be changed online after first setup"
   },
   "migrationBehaviour": {
-    "logicalVersions": "1..14",
+    "logicalVersions": "1..22",
     "oneLogicalSchemaPerVersion": true,
     "transactionality": "migration DDL and its history row commit in one transaction",
     "locking": "PostgreSQL advisory lock on a pinned connection serializes concurrent startup",
