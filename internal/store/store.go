@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CurrentVersion = 18
+const CurrentVersion = 19
 
 type Store struct {
 	db                    *sql.DB
@@ -366,6 +366,14 @@ CREATE TABLE _trestle_cluster_members (
 CREATE TABLE _trestle_cluster_invitations (
   id TEXT PRIMARY KEY, token_hash BLOB NOT NULL UNIQUE, state TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT
 ) STRICT;
+`}, {19, "cluster replay protection", `
+CREATE TABLE _trestle_cluster_nonces (
+  node_id TEXT NOT NULL REFERENCES _trestle_cluster_members(node_id) ON DELETE CASCADE,
+  nonce TEXT NOT NULL,
+  seen_at TEXT NOT NULL,
+  PRIMARY KEY(node_id,nonce)
+) STRICT;
+CREATE INDEX _trestle_cluster_nonces_seen ON _trestle_cluster_nonces(seen_at);
 `}}
 
 func Open(ctx context.Context, dataDir string) (*Store, error) {

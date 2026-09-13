@@ -21,6 +21,7 @@ import (
 	"github.com/trestle-cv/trestle/internal/audit"
 	"github.com/trestle-cv/trestle/internal/backup"
 	"github.com/trestle-cv/trestle/internal/buildinfo"
+	clusterapi "github.com/trestle-cv/trestle/internal/cluster"
 	"github.com/trestle-cv/trestle/internal/collections"
 	"github.com/trestle-cv/trestle/internal/config"
 	"github.com/trestle-cv/trestle/internal/databasesetup"
@@ -231,6 +232,10 @@ func main() {
 	apiRoutes.Handle("/api/v1/openapi.json", apiDocs)
 	apiRoutes.Handle("/api/v1/capabilities", apiDocs)
 	adminRoutes := http.NewServeMux()
+	clusterService := clusterapi.New(database.DB())
+	clusterTransport := clusterapi.NewTransport(database.DB(), clusterService, nil)
+	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version}
+	adminRoutes.Handle("/admin/v1/cluster/", clusterHandler)
 	databaseSetup := databasesetup.New(admin, databasesetup.Options{DataDir: cfg.DataDir, Current: database.Provider(), Explicit: cfg.DatabaseExplicit || cfg.DatabaseConfigured, MaxOpen: cfg.DatabaseMaxOpen, MaxIdle: cfg.DatabaseMaxIdle, ConnectTimeout: cfg.DatabaseConnectTimeout, ConnMaxLifetime: cfg.DatabaseConnMaxLifetime})
 	adminRoutes.Handle("/admin/v1/database/setup", databaseSetup)
 	adminRoutes.Handle("/admin/v1/collections", collectionAdmin)
