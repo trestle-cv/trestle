@@ -2,10 +2,10 @@ package adminauth
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	coreauth "github.com/gantry-tools/gantry-core/auth"
 	"github.com/trestle-cv/trestle/internal/store"
@@ -63,11 +63,20 @@ func knownCapability(value string) bool {
 }
 
 type managedUser struct {
-	ID        string   `json:"id"`
-	Email     string   `json:"email"`
-	Enabled   bool     `json:"enabled"`
-	Roles     []string `json:"roles"`
-	CreatedAt string   `json:"createdAt"`
+	ID          string            `json:"id"`
+	DisplayName string            `json:"displayName"`
+	Email       string            `json:"email"`
+	Enabled     bool              `json:"enabled"`
+	Roles       []string          `json:"roles"`
+	Identities  []managedIdentity `json:"identities"`
+	CreatedAt   string            `json:"createdAt"`
+}
+type managedIdentity struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Enabled  bool   `json:"enabled"`
 }
 type managedRole struct {
 	ID           string   `json:"id"`
@@ -104,35 +113,16 @@ func (h *Handler) manageUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 403, "authorization_denied", "A user-management capability is required.")
 		return
 	}
-	rows, err := h.db.QueryContext(r.Context(), "SELECT id,email,disabled_at,created_at FROM _trestle_admins ORDER BY email")
-	if err != nil {
-		writeError(w, 500, "internal_error", "The request could not be completed.")
-		return
-	}
 	out := []managedUser{}
-	for rows.Next() {
-		var v managedUser
-		var disabled sql.NullString
-		if rows.Scan(&v.ID, &v.Email, &disabled, &v.CreatedAt) != nil {
-			writeError(w, 500, "internal_error", "The request could not be completed.")
-			return
+	for _, account := range h.accounts.Accounts() {
+		managed := managedUser{ID: account.ID, DisplayName: account.DisplayName, Email: account.DisplayName, Enabled: account.Enabled, Roles: account.Roles, CreatedAt: account.CreatedAt.Format(time.RFC3339Nano)}
+		for _, identity := range account.Identities {
+			managed.Identities = append(managed.Identities, managedIdentity{ID: identity.ID, Type: identity.Type, Username: identity.Username, Email: identity.Email, Enabled: identity.Enabled})
+			if identity.Email != "" {
+				managed.Email = identity.Email
+			}
 		}
-		v.Enabled = !disabled.Valid
-		out = append(out, v)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		writeError(w, 500, "internal_error", "The request could not be completed.")
-		return
-	}
-	rows.Close()
-	for i := range out {
-		roles, err := h.userRoles(r, out[i].ID)
-		if err != nil {
-			writeError(w, 500, "internal_error", "The request could not be completed.")
-			return
-		}
-		out[i].Roles = roles
+		out = append(out, managed)
 	}
 	writeJSON(w, 200, map[string]any{"accounts": out})
 }
@@ -232,6 +222,10 @@ func (h *Handler) mutateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || tx.Commit() != nil {
 		writeError(w, 409, "update_failed", "The user could not be updated.")
+		return
+	}
+	if err := h.accounts.Reload(); err != nil {
+		writeError(w, 500, "internal_error", "The account model could not be reloaded.")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -347,6 +341,10 @@ func (h *Handler) manageRoles(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.ExecContext(r.Context(), "INSERT INTO _trestle_roles(id,name,capabilities_json,built_in) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,capabilities_json=excluded.capabilities_json WHERE _trestle_roles.built_in=0", v.ID, v.Name, string(raw), false)
 	if err != nil {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
+		return
+	}
+	if err := h.accounts.Reload(); err != nil {
+		writeError(w, 500, "internal_error", "The account model could not be reloaded.")
 		return
 	}
 	writeJSON(w, 200, v)

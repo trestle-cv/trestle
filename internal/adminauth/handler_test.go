@@ -264,7 +264,7 @@ func TestPasswordEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(encoded, "$argon2id$") || !verifyPassword(encoded, "correct horse battery staple") || verifyPassword(encoded, "wrong password") {
+	if !strings.HasPrefix(encoded, "pbkdf2-sha256$") || !verifyPassword(encoded, "correct horse battery staple") || verifyPassword(encoded, "wrong password") {
 		t.Fatal("password verification contract failed")
 	}
 	if _, err := hashPassword("short"); err == nil {

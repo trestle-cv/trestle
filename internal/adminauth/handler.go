@@ -23,6 +23,7 @@ const cookieName = "trestle_admin_session"
 
 type Handler struct {
 	db              store.Executor
+	accounts        *coreauth.Model
 	provider        string
 	now             func() time.Time
 	limiter         *limiter
@@ -58,7 +59,12 @@ func New(db any, provider ...string) *Handler {
 	if len(provider) > 0 {
 		name = provider[0]
 	}
-	return &Handler{db: store.Adapt(db), provider: name, now: time.Now, limiter: newLimiter(10, time.Minute), passwordLimiter: newLimiter(10, time.Minute)}
+	executor := store.Adapt(db)
+	accounts, err := coreauth.NewModel(accountPersistence{db: executor}, trestleAccountPolicy())
+	if err != nil {
+		panic(err)
+	}
+	return &Handler{db: executor, accounts: accounts, provider: name, now: time.Now, limiter: newLimiter(10, time.Minute), passwordLimiter: newLimiter(10, time.Minute)}
 }
 
 func (h *Handler) SetSetupGuard(guard func(context.Context) error) {
@@ -137,6 +143,10 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
 	}
+	if err := h.accounts.Reload(); err != nil {
+		writeError(w, 500, "internal_error", "The account model could not be reloaded.")
+		return
+	}
 	h.passwordLimiter.Clear(key)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -151,11 +161,7 @@ func (h *Handler) setupStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetupRequired(ctx context.Context) (bool, error) {
-	var count int
-	if err := h.db.QueryRowContext(ctx, "SELECT count(*) FROM _trestle_admins").Scan(&count); err != nil {
-		return false, err
-	}
-	return count == 0, nil
+	return h.accounts.Empty(), nil
 }
 
 func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +240,10 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "setup_complete", "Initial setup has already been completed.")
 		return
 	}
+	if err := h.accounts.Reload(); err != nil {
+		writeError(w, 500, "internal_error", "The account model could not be reloaded.")
+		return
+	}
 	h.issueSession(w, r, adminID, email)
 }
 
@@ -252,15 +262,13 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email, _ := normalizeEmail(input.Email)
-	var id, storedEmail, hash string
-	var disabled sql.NullString
-	err := h.db.QueryRowContext(r.Context(), "SELECT id,email,password_hash,disabled_at FROM _trestle_admins WHERE email=?", email).Scan(&id, &storedEmail, &hash, &disabled)
-	if err != nil || disabled.Valid || !verifyPassword(hash, input.Password) {
+	account, _, valid := h.accounts.AuthenticatePassword(email, input.Password)
+	if !valid {
 		writeError(w, 401, "invalid_credentials", "The email or password is incorrect.")
 		return
 	}
 	h.limiter.Clear(key)
-	h.issueSession(w, r, id, storedEmail)
+	h.issueSession(w, r, account.ID, account.DisplayName)
 }
 
 func (h *Handler) issueSession(w http.ResponseWriter, r *http.Request, adminID, email string) {
@@ -310,24 +318,7 @@ func (h *Handler) AuthorizeCapability(r *http.Request, mutation bool, capability
 	if !ok {
 		return Principal{}, false
 	}
-	rows, err := h.db.QueryContext(r.Context(), "SELECT r.capabilities_json FROM _trestle_roles r JOIN _trestle_admin_roles ar ON ar.role_id=r.id WHERE ar.admin_id=?", principal.AdminID)
-	if err != nil {
-		return Principal{}, false
-	}
-	defer rows.Close()
-	var effective []string
-	for rows.Next() {
-		var raw string
-		if rows.Scan(&raw) != nil {
-			return Principal{}, false
-		}
-		var caps []string
-		if json.Unmarshal([]byte(raw), &caps) != nil {
-			return Principal{}, false
-		}
-		effective = append(effective, caps...)
-	}
-	if rows.Err() != nil || !coreauth.HasCapability(effective, capability) {
+	if !coreauth.HasCapability(h.accounts.Capabilities(principal.AdminID), capability) {
 		return Principal{}, false
 	}
 	return principal, true
