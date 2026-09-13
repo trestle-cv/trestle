@@ -426,3 +426,7 @@ Start with:
 - [UI.md](UI.md) - fixed-viewport vanilla dashboard contract
 - [FUNCTIONS.md](FUNCTIONS.md) - AWS Lambda event integration
 - [SECURITY.md](SECURITY.md) - trust model and security invariants
+
+## Headless administration
+
+Use `trestle setup --email-file FILE --password-file FILE`, `trestle config show --json`, and the backup, restore, migrate and service commands for automation. Stop the service before `trestle reset --auth` or `trestle reset --all`; confirmation is the exact phrase `TRESTLE AUTH` or `TRESTLE ALL`. SQLite resets retain timestamped backups. PostgreSQL resets fail closed and require a database-native backup/reset workflow.

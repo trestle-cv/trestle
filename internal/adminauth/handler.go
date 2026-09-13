@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -162,6 +163,54 @@ func (h *Handler) setupStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SetupRequired(ctx context.Context) (bool, error) {
 	return h.accounts.Empty(), nil
+}
+
+// SetupAdministrator performs first-run setup for trusted local automation.
+func (h *Handler) SetupAdministrator(ctx context.Context, email, password, policy string) error {
+	email, ok := normalizeEmail(email)
+	if !ok {
+		return errors.New("valid administrator email required")
+	}
+	hash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+	if !validRegistrationPolicy(policy) {
+		return errors.New("invalid application registration policy")
+	}
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if h.provider == string(store.Postgres) {
+		if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(839201347562)"); err != nil {
+			return err
+		}
+	}
+	var count int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM _trestle_admins").Scan(&count); err != nil {
+		return err
+	}
+	if count != 0 {
+		return errors.New("setup already completed")
+	}
+	id, _ := randomToken(18)
+	now := h.now().UTC().Format(time.RFC3339Nano)
+	adminID := "adm_" + id
+	if _, err = tx.ExecContext(ctx, "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", adminID, email, hash, now); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES(?,?)", adminID, "administrator"); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE _trestle_app_registration_policy SET policy=?,set_at=? WHERE id=1", policy, now); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return h.accounts.Reload()
 }
 
 func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {

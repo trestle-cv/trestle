@@ -49,6 +49,15 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "service" {
 		os.Exit(runService(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "reset" {
+		os.Exit(runReset(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		os.Exit(runConfig(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "setup" {
+		os.Exit(runSetup(os.Args[2:]))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "serve" {
 		os.Args = append(os.Args[:1], os.Args[2:]...)
 	}
