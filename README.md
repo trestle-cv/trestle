@@ -72,7 +72,7 @@ makes no production-proven or battle-proven claim.
 
 ## Requirements
 
-- Go 1.22 or newer
+- Go 1.25.0 or newer
 - A current Nift 4.x executable available as `nift`
 
 Nift is a build-time dependency only. The generated dashboard is embedded in

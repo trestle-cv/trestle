@@ -1,6 +1,6 @@
 module github.com/trestle-cv/trestle
 
-go 1.22.0
+go 1.25.0
 
 require (
 	github.com/gantry-tools/gantry-core v0.1.1
