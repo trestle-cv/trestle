@@ -30,6 +30,9 @@ func testHandler(t *testing.T) (*Handler, string, *http.Cookie) {
 	if _, err := database.DB().Exec(`INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES('adm_test','admin@example.test','unused',?)`, now.Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := database.DB().Exec(`INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES('adm_test','administrator')`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := database.DB().Exec(`INSERT INTO _trestle_admin_sessions(id,admin_id,token_hash,csrf_hash,created_at,expires_at) VALUES('ses_test','adm_test',?,?,?,?)`, tokenHash[:], csrfHash[:], now.Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
