@@ -26,7 +26,7 @@ func TestConcurrentClaimsExecuteEachJobOnce(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err = h.Enqueue(context.Background(), tx, "probe", map[string]int{"index": i}, ""); err != nil {
+				if _, _, err = h.Enqueue(context.Background(), tx, "probe", map[string]int{"index": i}, ""); err != nil {
 					t.Fatal(err)
 				}
 				if err = tx.Commit(); err != nil {
@@ -88,7 +88,7 @@ func TestRolledBackTransactionDoesNotPublishJob(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := h.Enqueue(context.Background(), tx, "probe", map[string]any{"x": 1}, ""); err != nil {
+			if _, _, err := h.Enqueue(context.Background(), tx, "probe", map[string]any{"x": 1}, ""); err != nil {
 				t.Fatal(err)
 			}
 			if err := tx.Rollback(); err != nil {

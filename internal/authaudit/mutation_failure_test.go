@@ -214,7 +214,7 @@ func TestSecuritySensitiveMutationsFailClosed(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := queue.Enqueue(context.Background(), tx, "noop", map[string]any{}, ""); err != nil {
+			if _, _, err := queue.Enqueue(context.Background(), tx, "noop", map[string]any{}, ""); err != nil {
 				t.Fatal(err)
 			}
 			if err := tx.Commit(); err != nil {

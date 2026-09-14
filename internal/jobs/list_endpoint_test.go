@@ -57,7 +57,7 @@ func TestJobsEndpointListsFullFieldsAndFilters(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := h.Enqueue(context.Background(), tx, "probe", map[string]any{"index": i}, ""); err != nil {
+				if _, _, err := h.Enqueue(context.Background(), tx, "probe", map[string]any{"index": i}, ""); err != nil {
 					t.Fatal(err)
 				}
 				if err := tx.Commit(); err != nil {

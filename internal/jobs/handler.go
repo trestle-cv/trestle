@@ -45,15 +45,31 @@ func (h *Handler) Register(kind string, executor Executor) {
 	defer h.mu.Unlock()
 	h.executors[kind] = executor
 }
-func (h *Handler) Enqueue(ctx context.Context, tx store.Transaction, kind string, payload any, idempotency string) (string, error) {
+func (h *Handler) Enqueue(ctx context.Context, tx store.Transaction, kind string, payload any, idempotency string) (string, bool, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	id := "job_" + token(15)
 	now := h.now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, "INSERT INTO _trestle_jobs(id,kind,payload_json,status,available_at,idempotency_key,created_at,updated_at) VALUES(?,?,?,'pending',?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING", id, kind, string(encoded), now, null(idempotency), now, now)
-	return id, err
+	result, err := tx.ExecContext(ctx, "INSERT INTO _trestle_jobs(id,kind,payload_json,status,available_at,idempotency_key,created_at,updated_at) VALUES(?,?,?,'pending',?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING", id, kind, string(encoded), now, null(idempotency), now, now)
+	if err != nil {
+		return "", false, err
+	}
+	n, _ := result.RowsAffected()
+	if n == 1 {
+		return id, true, nil
+	}
+	if idempotency == "" {
+		return "", false, errors.New("job could not be enqueued")
+	}
+	// The idempotency key already produced a job; return the existing job so a
+	// retried submission never fabricates a fresh id that does not exist.
+	var existing string
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM _trestle_jobs WHERE idempotency_key=?", idempotency).Scan(&existing); err != nil {
+		return "", false, errors.New("existing idempotent job unavailable")
+	}
+	return existing, false, nil
 }
 func (h *Handler) Start(ctx context.Context) {
 	go func() {
@@ -149,7 +165,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer tx.Rollback()
-		id, err := h.Enqueue(r.Context(), tx, in.Kind, in.Payload, in.IdempotencyKey)
+		id, created, err := h.Enqueue(r.Context(), tx, in.Kind, in.Payload, in.IdempotencyKey)
 		if err != nil {
 			writeError(w, 409, "enqueue_failed", "The job could not be enqueued.")
 			return
@@ -158,7 +174,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "internal_error", "The request could not be completed.")
 			return
 		}
-		writeJSON(w, 201, map[string]string{"id": id})
+		status := 201
+		if !created {
+			status = 200
+		}
+		writeJSON(w, status, map[string]string{"id": id})
 	case r.Method == http.MethodPost && id != "":
 		h.action(w, r, id)
 	default:

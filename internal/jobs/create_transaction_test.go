@@ -86,3 +86,56 @@ func TestJobCreationTransactionPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestIdempotencyKeyReturnsExistingJob(t *testing.T) {
+	for _, provider := range storetest.Providers(t) {
+		t.Run(provider, func(t *testing.T) {
+			s := storetest.Open(t, provider)
+			admin := adminauth.New(s.DB(), string(s.Provider()))
+			body := strings.NewReader(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
+			r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
+			r.Host = "example.test"
+			r.Header.Set("Origin", "http://example.test")
+			w := httptest.NewRecorder()
+			admin.ServeHTTP(w, r)
+			cookie := w.Result().Cookies()[0]
+			var setupResp struct {
+				CSRF string `json:"csrfToken"`
+			}
+			json.Unmarshal(w.Body.Bytes(), &setupResp)
+
+			h := New(s.DB(), admin)
+			first := enqueueJob(h, cookie, setupResp.CSRF, `{"kind":"noop","payload":{},"idempotencyKey":"key-1"}`)
+			if first.Code != 201 {
+				t.Fatalf("first enqueue returned %d, want 201", first.Code)
+			}
+			var firstID string
+			if err := json.NewDecoder(first.Body).Decode(&struct {
+				ID *string `json:"id"`
+			}{ID: &firstID}); err != nil {
+				t.Fatalf("decode first id: %v", err)
+			}
+			var rows int
+			if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_jobs").Scan(&rows); err != nil || rows != 1 {
+				t.Fatalf("rows=%d err=%v", rows, err)
+			}
+
+			second := enqueueJob(h, cookie, setupResp.CSRF, `{"kind":"noop","payload":{},"idempotencyKey":"key-1"}`)
+			if second.Code != 200 {
+				t.Fatalf("idempotent re-enqueue returned %d, want 200", second.Code)
+			}
+			var secondID string
+			if err := json.NewDecoder(second.Body).Decode(&struct {
+				ID *string `json:"id"`
+			}{ID: &secondID}); err != nil {
+				t.Fatalf("decode second id: %v", err)
+			}
+			if secondID != firstID {
+				t.Fatalf("idempotent re-enqueue returned a different id: first=%q second=%q", firstID, secondID)
+			}
+			if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_jobs").Scan(&rows); err != nil || rows != 1 {
+				t.Fatalf("rows after replay=%d err=%v", rows, err)
+			}
+		})
+	}
+}

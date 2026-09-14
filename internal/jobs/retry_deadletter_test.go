@@ -28,7 +28,7 @@ func TestJobRetryBackoffThenDeadLetter(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := h.Enqueue(context.Background(), tx, "boom", map[string]any{}, ""); err != nil {
+			if _, _, err := h.Enqueue(context.Background(), tx, "boom", map[string]any{}, ""); err != nil {
 				t.Fatal(err)
 			}
 			if err := tx.Commit(); err != nil {

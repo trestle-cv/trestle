@@ -76,7 +76,7 @@ func (h *Handler) Dispatch(ctx context.Context, tx store.Transaction, topic, col
 		if !contains(strings.Split(topics, ","), topic) {
 			continue
 		}
-		_, err = h.jobs.Enqueue(ctx, tx, "webhook", delivery{TargetID: id, Topic: topic, Collection: collection, RecordID: recordID, Payload: payload, DeliveryID: "del_" + token(12)}, "")
+		_, _, err = h.jobs.Enqueue(ctx, tx, "webhook", delivery{TargetID: id, Topic: topic, Collection: collection, RecordID: recordID, Payload: payload, DeliveryID: "del_" + token(12)}, "")
 		if err != nil {
 			return err
 		}
