@@ -11,6 +11,7 @@ import (
 
 	core "github.com/gantry-tools/gantry-core/cluster"
 	"github.com/trestle-cv/trestle/internal/store"
+	"github.com/trestle-cv/trestle/internal/storetest"
 )
 
 func openTest(t *testing.T) (*store.Store, *Service) {
@@ -259,5 +260,34 @@ func TestCompatibleProductVersionsAndStandaloneRemoval(t *testing.T) {
 	local, err := a.LocalSummary(ctx)
 	if err != nil || local.NodeID != ai.NodeID {
 		t.Fatalf("standalone summary=%+v err=%v", local, err)
+	}
+}
+
+func TestLocalSummaryWorksOnEveryProvider(t *testing.T) {
+	ctx := context.Background()
+	for _, provider := range storetest.Providers(t) {
+		t.Run(provider, func(t *testing.T) {
+			db := storetest.Open(t, provider)
+			service := New(db.DB())
+			summary, err := service.LocalSummary(ctx)
+			if err != nil {
+				t.Fatalf("LocalSummary failed on %s: %v", provider, err)
+			}
+			if summary.NodeID == "" {
+				t.Fatalf("LocalSummary returned no node identity on %s", provider)
+			}
+			// Inserting an enabled webhook must be counted through the dialect
+			// boolean literal on both providers.
+			if _, err = db.DB().ExecContext(ctx, `INSERT INTO _trestle_webhooks(id,name,url,topics,secret_cipher,enabled,created_at,updated_at) VALUES('wh-1','hook','https://example.test','events',?,?,?,?)`, []byte{0x01}, db.Dialect().Boolean(true), "now", "now"); err != nil {
+				t.Fatalf("seed webhook on %s: %v", provider, err)
+			}
+			summary, err = service.LocalSummary(ctx)
+			if err != nil {
+				t.Fatalf("LocalSummary failed after seeding on %s: %v", provider, err)
+			}
+			if summary.Webhooks != 1 {
+				t.Fatalf("webhooks=%d want 1 on %s", summary.Webhooks, provider)
+			}
+		})
 	}
 }

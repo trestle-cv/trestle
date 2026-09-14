@@ -281,14 +281,16 @@ func (s *Service) LocalSummary(ctx context.Context) (Summary, error) {
 	q := []struct {
 		p *int
 		s string
+		a []any
 	}{}
 	v := Summary{NodeID: i.NodeID}
 	q = []struct {
 		p *int
 		s string
-	}{{&v.Collections, `SELECT COUNT(*) FROM _trestle_collections`}, {&v.JobsPending, `SELECT COUNT(*) FROM _trestle_jobs WHERE status IN ('pending','running')`}, {&v.Webhooks, `SELECT COUNT(*) FROM _trestle_webhooks WHERE enabled=1`}, {&v.Functions, `SELECT COUNT(*) FROM _trestle_functions WHERE enabled=1`}}
+		a []any
+	}{{&v.Collections, `SELECT COUNT(*) FROM _trestle_collections`, nil}, {&v.JobsPending, `SELECT COUNT(*) FROM _trestle_jobs WHERE status IN ('pending','running')`, nil}, {&v.Webhooks, `SELECT COUNT(*) FROM _trestle_webhooks WHERE enabled=?`, []any{s.db.Dialect().Boolean(true)}}, {&v.Functions, `SELECT COUNT(*) FROM _trestle_functions WHERE enabled=?`, []any{s.db.Dialect().Boolean(true)}}}
 	for _, x := range q {
-		if err = s.db.QueryRowContext(ctx, x.s).Scan(x.p); err != nil {
+		if err = s.db.QueryRowContext(ctx, x.s, x.a...).Scan(x.p); err != nil {
 			return Summary{}, err
 		}
 	}
