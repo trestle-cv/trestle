@@ -80,6 +80,8 @@ type PortableSystem struct {
 	RegistrationPolicy []map[string]any `json:"registrationPolicy"`
 	Invitations        []map[string]any `json:"invitations"`
 	AccessRequests     []map[string]any `json:"accessRequests"`
+	Roles              []map[string]any `json:"roles,omitempty"`
+	AdminRoles         []map[string]any `json:"adminRoles,omitempty"`
 }
 
 func quote(identifier string) string { return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"` }
@@ -173,6 +175,8 @@ func Export(ctx context.Context, db store.Executor, dialect store.Dialect, w io.
 		{"registrationPolicy", &bundle.System.RegistrationPolicy, "_trestle_app_registration_policy"},
 		{"invitations", &bundle.System.Invitations, "_trestle_app_invitations"},
 		{"accessRequests", &bundle.System.AccessRequests, "_trestle_app_access_requests"},
+		{"roles", &bundle.System.Roles, "_trestle_roles"},
+		{"adminRoles", &bundle.System.AdminRoles, "_trestle_admin_roles"},
 	} {
 		values, err := dumpTable(ctx, tx, dialect, item.base)
 		if err != nil {
@@ -393,6 +397,9 @@ func Import(ctx context.Context, db store.Executor, dialect store.Dialect, r io.
 			return err
 		}
 	}
+	if err := importRoles(ctx, tx, dialect, bundle.System.Roles, bundle.System.AdminRoles); err != nil {
+		return err
+	}
 	if err := restoreRegistrationPolicy(ctx, tx, dialect, bundle); err != nil {
 		return err
 	}
@@ -532,6 +539,61 @@ func encodeField(dialect store.Dialect, kind string, v any) any {
 		return string(b)
 	}
 	return v
+}
+
+// importRoles restores the role catalog and per-admin role assignments. The
+// destination's fresh-install migration seeds the built-in administrator role,
+// so the tables are cleared and rebuilt from the archive rather than merged,
+// which would otherwise leave restored admins with no capabilities and locked
+// out. A pre-roles archive (SchemaVersion < 16) is left with the fresh-install
+// seed so restored admins keep the administrator role.
+func importRoles(ctx context.Context, tx store.Transaction, dialect store.Dialect, roles, adminRoles []map[string]any) error {
+	if len(roles) == 0 && len(adminRoles) == 0 {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM _trestle_admin_roles"); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM _trestle_roles"); err != nil {
+		return err
+	}
+	for _, row := range roles {
+		id, _ := row["id"].(string)
+		name, _ := row["name"].(string)
+		capabilities, _ := row["capabilities_json"].(string)
+		if id == "" || name == "" {
+			continue
+		}
+		builtIn := decodeArchiveBool(row["built_in"])
+		if _, err := tx.ExecContext(ctx, "INSERT INTO _trestle_roles(id,name,capabilities_json,built_in) VALUES(?,?,?,?)", id, name, capabilities, dialect.Boolean(builtIn)); err != nil {
+			return fmt.Errorf("insert _trestle_roles: %w", err)
+		}
+	}
+	for _, row := range adminRoles {
+		adminID, _ := row["admin_id"].(string)
+		roleID, _ := row["role_id"].(string)
+		if adminID == "" || roleID == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES(?,?)", adminID, roleID); err != nil {
+			return fmt.Errorf("insert _trestle_admin_roles: %w", err)
+		}
+	}
+	return nil
+}
+
+// decodeArchiveBool converts a portable built_in value (bool on PostgreSQL,
+// int64 on SQLite) into a Go bool.
+func decodeArchiveBool(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case int64:
+		return t != 0
+	case float64:
+		return t != 0
+	}
+	return false
 }
 
 func insertRows(ctx context.Context, tx store.Transaction, dialect store.Dialect, table string, rows []map[string]any) error {

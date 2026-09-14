@@ -91,6 +91,19 @@ func populatePortableFixture(t *testing.T, s *store.Store) {
 	if err := s.DB().QueryRow("SELECT id FROM _trestle_collections WHERE name='issues'").Scan(&colID); err != nil {
 		t.Fatal(err)
 	}
+	// Role catalog and per-admin assignments must survive the portable
+	// round-trip; the fixture exercises a custom role beyond the built-in
+	// administrator seed.
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_roles(id,name,capabilities_json,built_in) VALUES('auditor','Auditor','["records.read"]',?)`, s.Dialect().Boolean(false)); err != nil {
+		t.Fatal(err)
+	}
+	var adminID string
+	if err := s.DB().QueryRow("SELECT id FROM _trestle_admins ORDER BY id LIMIT 1").Scan(&adminID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES(?,?)`, adminID, "auditor"); err != nil {
+		t.Fatal(err)
+	}
 	var fieldIDs []string
 	rows, err := s.DB().Query("SELECT id FROM _trestle_fields WHERE collection_id=? ORDER BY position", colID)
 	if err != nil {
@@ -156,6 +169,20 @@ func TestPortableRoundTripAcrossProviders(t *testing.T) {
 				}
 				if admins != 1 || users != 1 || credentials != 1 || rules != 1 || events != 1 || audit != 1 || jobs != 1 || webhooks != 1 || functions != 1 || files != 1 {
 					t.Fatalf("counts admins=%d users=%d creds=%d rules=%d events=%d audit=%d jobs=%d wh=%d fn=%d files=%d", admins, users, credentials, rules, events, audit, jobs, webhooks, functions, files)
+				}
+				var roles, adminRoles int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_roles").Scan(&roles); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_admin_roles").Scan(&adminRoles); err != nil {
+					t.Fatal(err)
+				}
+				if roles != 2 || adminRoles != 2 {
+					t.Fatalf("roles=%d admin_roles=%d, want 2 and 2 (role catalog and assignments must survive)", roles, adminRoles)
+				}
+				var auditorAssignment int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_admin_roles ar JOIN _trestle_roles r ON r.id=ar.role_id WHERE r.id='auditor'").Scan(&auditorAssignment); err != nil || auditorAssignment != 1 {
+					t.Fatalf("auditor assignment=%d err=%v", auditorAssignment, err)
 				}
 				var collectionsCount int
 				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_collections").Scan(&collectionsCount); err != nil || collectionsCount != 1 {
