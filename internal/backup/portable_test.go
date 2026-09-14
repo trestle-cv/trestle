@@ -672,6 +672,150 @@ func nullRow(v string) any {
 	return v
 }
 
-// TestRestorePrePolicyArchiveUsesOpen proves a pre-v15 portable archive (whose
-// era had open registration) restores the historical open policy, replacing the
-// fresh-install closed seed, regardless of any users in the archive.
+// seedClusterAndPropagation installs cluster identity, one member, propagation
+// profiles (including last_run_at) and propagation history on the source store
+// so the portable restore policy can be exercised.
+func seedClusterAndPropagation(t *testing.T, s *store.Store) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_cluster_identity(singleton,node_id,installation_id,display_name,public_endpoint,public_key,private_key,capabilities_json,protocol_version,product_version,created_at) VALUES(1,'tr_node_a','tr_install_a','Node A','https://node-a.example',?,?,'["cluster.health"]',1,'test',?)`, []byte{0x01}, []byte{0x02}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_cluster_members(node_id,installation_id,display_name,public_endpoint,public_key,capabilities_json,protocol_version,product_version,state,outbound_secret,inbound_secret_hash,credential_version,created_at,paired_at) VALUES('tr_node_b','tr_install_b','Node B','https://node-b.example',?,'["cluster.health"]',1,'test','active','plaintext-secret-must-not-leak',?,1,?,?)`, []byte{0x03}, []byte{0x04}, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_propagation_profiles(id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled,created_at,updated_at,last_run_at) VALUES('prof_1','prod','{"members":true}','["request-definition"]','automatic','15m','',?,?,?,?)`, s.Dialect().Boolean(true), now, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`INSERT INTO _trestle_propagation_history(id,plan_id,actor,target,status,applied,failed,rolled_back,detail,created_at) VALUES('hist_1','plan_1','system:1','all','applied',2,0,0,'',?)`, now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestPortableRestorePolicyForClusterAndPropagationState verifies the portable
+// format's explicit cluster/propagation restore policy across every provider
+// pair: cluster identity and membership are deliberately excluded (they carry
+// credentials) and this is recorded as a fail-visible notice; propagation
+// profiles are restored with transient last_run_at cleared; history is
+// restored; authorization roles remain intact.
+func TestPortableRestorePolicyForClusterAndPropagationState(t *testing.T) {
+	providers := storetest.Providers(t)
+	for _, src := range providers {
+		src := src
+		var portable string
+		t.Run("export-"+src, func(t *testing.T) {
+			s := storetest.Open(t, src)
+			populatePortableFixture(t, s)
+			seedClusterAndPropagation(t, s)
+			var buf bytes.Buffer
+			if err := Export(context.Background(), s.DB(), s.Dialect(), &buf); err != nil {
+				t.Fatal(err)
+			}
+			portable = buf.String()
+		})
+		for _, dst := range providers {
+			dst := dst
+			t.Run(src+"->"+dst, func(t *testing.T) {
+				s := storetest.Open(t, dst)
+				if err := Import(context.Background(), s.DB(), s.Dialect(), strings.NewReader(portable)); err != nil {
+					t.Fatal(err)
+				}
+				// Cluster identity and membership must NOT be restored.
+				var identity, members int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_cluster_identity").Scan(&identity); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_cluster_members").Scan(&members); err != nil {
+					t.Fatal(err)
+				}
+				if identity != 0 || members != 0 {
+					t.Fatalf("cluster state restored: identity=%d members=%d", identity, members)
+				}
+				// Propagation profile restored with last_run_at cleared.
+				var profileID, lastRun interface{}
+				if err := s.DB().QueryRow("SELECT id,last_run_at FROM _trestle_propagation_profiles WHERE id='prof_1'").Scan(&profileID, &lastRun); err != nil {
+					t.Fatalf("profile not restored: %v", err)
+				}
+				if lastRun != nil {
+					t.Fatalf("last_run_at must be cleared on restore, got %v", lastRun)
+				}
+				var hist int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_propagation_history WHERE id='hist_1'").Scan(&hist); err != nil || hist != 1 {
+					t.Fatalf("history not restored: hist=%d err=%v", hist, err)
+				}
+				// Fail-visible notices carried as system metadata.
+				var notices int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_system_meta WHERE key LIKE 'restore_notice_%'").Scan(&notices); err != nil {
+					t.Fatal(err)
+				}
+				if notices < 2 {
+					t.Fatalf("expected cluster identity+membership restore notices, got %d", notices)
+				}
+				// Roles must remain preserved alongside the new tables.
+				var roles, adminRoles int
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_roles").Scan(&roles); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.DB().QueryRow("SELECT count(*) FROM _trestle_admin_roles").Scan(&adminRoles); err != nil {
+					t.Fatal(err)
+				}
+				if roles != 2 || adminRoles != 2 {
+					t.Fatalf("roles=%d admin_roles=%d, want 2 and 2", roles, adminRoles)
+				}
+				// The plaintext member secret must not appear anywhere in the archive.
+				if strings.Contains(portable, "plaintext-secret-must-not-leak") {
+					t.Fatal("plaintext cluster credential leaked into the portable archive")
+				}
+			})
+		}
+	}
+}
+
+// TestPortableRestoreRefusesNonEmptyClusterDestination proves a restore refuses
+// a destination that already holds cluster identity or membership rather than
+// silently merging topology state.
+func TestPortableRestoreRefusesNonEmptyClusterDestination(t *testing.T) {
+	ctx := context.Background()
+	for _, provider := range storetest.Providers(t) {
+		provider := provider
+		t.Run(provider, func(t *testing.T) {
+			var url string
+			var release func()
+			if provider == "postgres" {
+				url = storetest.PostgresURL(t)
+				release = storetest.Lock(t, url)
+				storetest.ResetPostgres(t, url)
+			}
+			defer func() {
+				if release != nil {
+					release()
+				}
+			}()
+			srcDir := t.TempDir()
+			src := openStoreAt(t, srcDir, provider, url)
+			populatePortableFixture(t, src)
+			seedClusterAndPropagation(t, src)
+			var buf bytes.Buffer
+			if err := Export(ctx, src.DB(), src.Dialect(), &buf); err != nil {
+				t.Fatal(err)
+			}
+			if err := src.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if provider == "postgres" {
+				storetest.ResetPostgres(t, url)
+			}
+			portable := buf.String()
+
+			dstDir := t.TempDir()
+			dst := openStoreAt(t, dstDir, provider, url)
+			defer dst.Close()
+			if _, err := dst.DB().Exec(`INSERT INTO _trestle_cluster_identity(singleton,node_id,installation_id,display_name,public_endpoint,public_key,private_key,capabilities_json,protocol_version,product_version,created_at) VALUES(1,'other','other_i','Other','https://other.example',?,?,'[]',1,'test','now')`, []byte{0x01}, []byte{0x02}); err != nil {
+				t.Fatal(err)
+			}
+			if err := Import(ctx, dst.DB(), dst.Dialect(), strings.NewReader(portable)); err == nil {
+				t.Fatal("restore into a destination with cluster identity succeeded")
+			}
+		})
+	}
+}

@@ -32,6 +32,10 @@ type PortableBundle struct {
 	ExportedAt    string               `json:"exportedAt"`
 	Collections   []PortableCollection `json:"collections"`
 	System        PortableSystem       `json:"system"`
+	// RestoreNotices records the portable format's restore-policy decisions so
+	// a restore is fail-visible instead of silently dropping state. They are
+	// carried into the archive and replayed as durable audit rows on import.
+	RestoreNotices []string `json:"restoreNotices,omitempty"`
 }
 
 type PortableCollection struct {
@@ -63,25 +67,27 @@ type PortableRecord struct {
 }
 
 type PortableSystem struct {
-	Admins             []map[string]any `json:"admins"`
-	AdminSessions      []map[string]any `json:"adminSessions"`
-	AppUsers           []map[string]any `json:"appUsers"`
-	AppSessions        []map[string]any `json:"appSessions"`
-	Credentials        []map[string]any `json:"credentials"`
-	AppAccess          []map[string]any `json:"appAccess"`
-	CollectionRules    []map[string]any `json:"collectionRules"`
-	Events             []map[string]any `json:"events"`
-	Audit              []map[string]any `json:"audit"`
-	Jobs               []map[string]any `json:"jobs"`
-	Webhooks           []map[string]any `json:"webhooks"`
-	Functions          []map[string]any `json:"functions"`
-	Files              []map[string]any `json:"files"`
-	SystemMeta         []map[string]any `json:"systemMeta"`
-	RegistrationPolicy []map[string]any `json:"registrationPolicy"`
-	Invitations        []map[string]any `json:"invitations"`
-	AccessRequests     []map[string]any `json:"accessRequests"`
-	Roles              []map[string]any `json:"roles,omitempty"`
-	AdminRoles         []map[string]any `json:"adminRoles,omitempty"`
+	Admins              []map[string]any `json:"admins"`
+	AdminSessions       []map[string]any `json:"adminSessions"`
+	AppUsers            []map[string]any `json:"appUsers"`
+	AppSessions         []map[string]any `json:"appSessions"`
+	Credentials         []map[string]any `json:"credentials"`
+	AppAccess           []map[string]any `json:"appAccess"`
+	CollectionRules     []map[string]any `json:"collectionRules"`
+	Events              []map[string]any `json:"events"`
+	Audit               []map[string]any `json:"audit"`
+	Jobs                []map[string]any `json:"jobs"`
+	Webhooks            []map[string]any `json:"webhooks"`
+	Functions           []map[string]any `json:"functions"`
+	Files               []map[string]any `json:"files"`
+	SystemMeta          []map[string]any `json:"systemMeta"`
+	RegistrationPolicy  []map[string]any `json:"registrationPolicy"`
+	Invitations         []map[string]any `json:"invitations"`
+	AccessRequests      []map[string]any `json:"accessRequests"`
+	Roles               []map[string]any `json:"roles,omitempty"`
+	AdminRoles          []map[string]any `json:"adminRoles,omitempty"`
+	PropagationProfiles []map[string]any `json:"propagationProfiles,omitempty"`
+	PropagationHistory  []map[string]any `json:"propagationHistory,omitempty"`
 }
 
 func quote(identifier string) string { return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"` }
@@ -183,6 +189,39 @@ func Export(ctx context.Context, db store.Executor, dialect store.Dialect, w io.
 			return fmt.Errorf("export %s: %w", item.name, err)
 		}
 		*item.dst = values
+	}
+
+	// Propagation schedules and their history are durable configuration and are
+	// carried into the archive (last_run_at is transient scheduling state and is
+	// cleared on import so schedules re-evaluate from a known baseline).
+	profiles, err := dumpTable(ctx, tx, dialect, "_trestle_propagation_profiles")
+	if err != nil {
+		return fmt.Errorf("export propagation profiles: %w", err)
+	}
+	bundle.System.PropagationProfiles = profiles
+	history, err := dumpTable(ctx, tx, dialect, "_trestle_propagation_history")
+	if err != nil {
+		return fmt.Errorf("export propagation history: %w", err)
+	}
+	bundle.System.PropagationHistory = history
+
+	// Cluster identity and membership are deliberately excluded from the
+	// portable archive: cluster_identity carries the node's private signing key
+	// and cluster_members carries plaintext shared credentials, and the archive
+	// container is not encrypted. Excluding them is an explicit, fail-visible
+	// restore policy, never a silent assumption.
+	var identityCount, memberCount int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM _trestle_cluster_identity`).Scan(&identityCount); err != nil {
+		return fmt.Errorf("inspect cluster identity: %w", err)
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM _trestle_cluster_members`).Scan(&memberCount); err != nil {
+		return fmt.Errorf("inspect cluster membership: %w", err)
+	}
+	if identityCount > 0 {
+		bundle.RestoreNotices = append(bundle.RestoreNotices, "cluster identity was not included in the portable archive because it contains the node's private signing key; the restored node generates a new identity and must be re-paired")
+	}
+	if memberCount > 0 {
+		bundle.RestoreNotices = append(bundle.RestoreNotices, "cluster membership was not included in the portable archive because member rows contain plaintext shared credentials; cluster topology is not restored and peers must be re-paired after restore")
 	}
 
 	encoder := json.NewEncoder(w)
@@ -400,6 +439,12 @@ func Import(ctx context.Context, db store.Executor, dialect store.Dialect, r io.
 	if err := importRoles(ctx, tx, dialect, bundle.System.Roles, bundle.System.AdminRoles); err != nil {
 		return err
 	}
+	if err := importPropagation(ctx, tx, dialect, bundle.System.PropagationProfiles, bundle.System.PropagationHistory); err != nil {
+		return err
+	}
+	if err := importRestoreNotices(ctx, tx, bundle.RestoreNotices); err != nil {
+		return err
+	}
 	if err := restoreRegistrationPolicy(ctx, tx, dialect, bundle); err != nil {
 		return err
 	}
@@ -541,6 +586,71 @@ func encodeField(dialect store.Dialect, kind string, v any) any {
 	return v
 }
 
+// importPropagation restores propagation profiles and their history. Profiles
+// are durable configuration (selectors, kinds, mode, schedule, maintenance
+// window) and are carried across providers. last_run_at is transient scheduling
+// state and is deliberately cleared so a restored node re-evaluates its
+// schedules from a known baseline instead of silently skipping the next run.
+func importPropagation(ctx context.Context, tx store.Transaction, dialect store.Dialect, profiles, history []map[string]any) error {
+	for _, row := range profiles {
+		id, _ := row["id"].(string)
+		name, _ := row["name"].(string)
+		selector, _ := row["selector_json"].(string)
+		kinds, _ := row["kinds_json"].(string)
+		mode, _ := row["mode"].(string)
+		schedule, _ := row["schedule"].(string)
+		window, _ := row["maintenance_window"].(string)
+		created, _ := row["created_at"].(string)
+		updated, _ := row["updated_at"].(string)
+		if id == "" || name == "" || selector == "" || kinds == "" || mode == "" {
+			continue
+		}
+		enabled := decodeArchiveBool(row["enabled"])
+		if _, err := tx.ExecContext(ctx, "INSERT INTO _trestle_propagation_profiles(id,name,selector_json,kinds_json,mode,schedule,maintenance_window,enabled,created_at,updated_at,last_run_at) VALUES(?,?,?,?,?,?,?,?,?,?,NULL)", id, name, selector, kinds, mode, schedule, window, dialect.Boolean(enabled), created, updated); err != nil {
+			return fmt.Errorf("insert _trestle_propagation_profiles: %w", err)
+		}
+	}
+	for _, row := range history {
+		if len(row) == 0 {
+			continue
+		}
+		columns := make([]string, 0, len(row))
+		args := make([]any, 0, len(row))
+		marks := make([]string, 0, len(row))
+		for col, value := range row {
+			columns = append(columns, quote(col))
+			marks = append(marks, "?")
+			args = append(args, decodeRowValue(col, value))
+		}
+		stmt := "INSERT INTO _trestle_propagation_history (" + strings.Join(columns, ",") + ") VALUES (" + strings.Join(marks, ",") + ")"
+		if _, err := tx.ExecContext(ctx, stmt, args...); err != nil {
+			return fmt.Errorf("insert _trestle_propagation_history: %w", err)
+		}
+	}
+	return nil
+}
+
+// importRestoreNotices replays the portable format's restore-policy decisions
+// as durable system metadata so a restore is fail-visible: the operator can
+// inspect exactly what was deliberately not restored instead of reasoning about
+// an empty table.
+func importRestoreNotices(ctx context.Context, tx store.Transaction, notices []string) error {
+	if len(notices) == 0 {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	for index, notice := range notices {
+		if notice == "" {
+			continue
+		}
+		key := fmt.Sprintf("restore_notice_%d", index+1)
+		if _, err := tx.ExecContext(ctx, "INSERT INTO _trestle_system_meta(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", key, notice, now); err != nil {
+			return fmt.Errorf("record restore notice: %w", err)
+		}
+	}
+	return nil
+}
+
 // importRoles restores the role catalog and per-admin role assignments. The
 // destination's fresh-install migration seeds the built-in administrator role,
 // so the tables are cleared and rebuilt from the archive rather than merged,
@@ -675,6 +785,12 @@ var portableTables = []string{
 	"_trestle_collection_rules", "_trestle_events", "_trestle_audit",
 	"_trestle_jobs", "_trestle_webhooks", "_trestle_functions", "_trestle_files",
 	"_trestle_file_deletions", "_trestle_app_invitations", "_trestle_app_access_requests",
+	// Cluster identity/membership and propagation state are owned by the
+	// portable format: a restore is only permitted into a fresh destination
+	// with none of these present, so topology loss can never silently merge
+	// with pre-existing cluster state.
+	"_trestle_cluster_identity", "_trestle_cluster_members",
+	"_trestle_propagation_profiles", "_trestle_propagation_history",
 }
 
 // ValidateEmptyDestination requires every portable-owned table to be empty and
