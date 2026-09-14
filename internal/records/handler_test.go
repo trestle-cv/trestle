@@ -23,7 +23,7 @@ func setup(t *testing.T, provider string) (*Handler, session) {
 	t.Helper()
 	s := storetest.Open(t, provider)
 	auth := adminauth.New(s.DB(), string(s.Provider()))
-	w := invoke(t, auth, session{}, "POST", "/admin/v1/setup", map[string]any{"email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
+	w := invoke(t, auth, session{}, "POST", "/admin/v1/setup", map[string]any{"username": "admin", "email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
 	if w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
@@ -474,7 +474,7 @@ func TestJSONRecordRoundTrip(t *testing.T) {
 		t.Run(provider, func(t *testing.T) {
 			s := storetest.Open(t, provider)
 			auth := adminauth.New(s.DB(), string(s.Provider()))
-			w := invoke(t, auth, session{}, "POST", "/admin/v1/setup", map[string]any{"email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
+			w := invoke(t, auth, session{}, "POST", "/admin/v1/setup", map[string]any{"username": "admin", "email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
 			var login struct {
 				CSRF string `json:"csrfToken"`
 			}

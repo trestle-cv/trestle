@@ -27,7 +27,7 @@ func TestComposedRecordRollbackLeavesNoExternalState(t *testing.T) {
 		t.Run(provider, func(t *testing.T) {
 			s := storetest.Open(t, provider)
 			admin := adminauth.New(s.DB(), string(s.Provider()))
-			setup := invoke(t, admin, session{}, "POST", "/admin/v1/setup", map[string]any{"email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
+			setup := invoke(t, admin, session{}, "POST", "/admin/v1/setup", map[string]any{"username": "admin", "email": "admin@example.com", "password": "correct horse battery staple", "applicationRegistrationPolicy": "closed"}, nil)
 			var body struct {
 				CSRF string `json:"csrfToken"`
 			}

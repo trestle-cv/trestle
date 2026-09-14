@@ -87,6 +87,7 @@ type managedRole struct {
 type userMutation struct {
 	Action   string   `json:"action"`
 	ID       string   `json:"id"`
+	Username string   `json:"username"`
 	Email    string   `json:"email"`
 	Password string   `json:"password"`
 	Enabled  *bool    `json:"enabled"`
@@ -155,8 +156,8 @@ func (h *Handler) mutateUser(w http.ResponseWriter, r *http.Request) {
 	now := h.now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 	switch input.Action {
 	case "create":
-		if input.Email == "" || len(input.Roles) == 0 {
-			writeError(w, 422, "validation_failed", "Email and at least one role are required.")
+		if input.Username == "" || input.Email == "" || len(input.Roles) == 0 {
+			writeError(w, 422, "validation_failed", "Username, email and at least one role are required.")
 			return
 		}
 		hash, err := hashPassword(input.Password)
@@ -169,7 +170,7 @@ func (h *Handler) mutateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := NewID("adm")
-		if _, err = tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", id, input.Email, hash, now); err == nil {
+		if _, err = tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES(?,?,?,?,?)", id, input.Username, input.Email, hash, now); err == nil {
 			err = replaceRoles(r.Context(), tx, id, input.Roles)
 		}
 	case "update":

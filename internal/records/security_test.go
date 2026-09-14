@@ -28,7 +28,7 @@ func setupSecurityFixture(t *testing.T, provider string) securityFixture {
 	t.Helper()
 	database := storetest.Open(t, provider)
 	admin := adminauth.New(database.DB(), string(database.Provider()))
-	setup := invoke(t, admin, session{}, http.MethodPost, "/admin/v1/setup", map[string]any{"email": "admin@example.test", "password": "mudblood", "applicationRegistrationPolicy": "closed"}, nil)
+	setup := invoke(t, admin, session{}, http.MethodPost, "/admin/v1/setup", map[string]any{"username": "admin", "email": "admin@example.test", "password": "mudblood", "applicationRegistrationPolicy": "closed"}, nil)
 	var setupBody struct {
 		CSRF string `json:"csrfToken"`
 	}

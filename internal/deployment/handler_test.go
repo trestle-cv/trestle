@@ -21,7 +21,7 @@ func TestDiagnosticsAreAuthenticatedAndRedacted(t *testing.T) {
 	}
 	defer database.Close()
 	admin := adminauth.New(database.DB())
-	setup := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
+	setup := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
 	setup.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	admin.ServeHTTP(w, setup)

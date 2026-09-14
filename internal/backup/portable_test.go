@@ -23,7 +23,7 @@ import (
 
 func adminCookieCSRF(t *testing.T, admin *adminauth.Handler) (*httptest.ResponseRecorder, string) {
 	t.Helper()
-	body := strings.NewReader(`{"email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
+	body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")
@@ -301,7 +301,7 @@ func TestExportSnapshotConsistency(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				s.DB().Exec("INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES('adm_extra','extra@example.com','h','2026-01-01T00:00:00Z')")
+				s.DB().Exec("INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES('adm_extra','extra@example.com','extra@example.com','h','2026-01-01T00:00:00Z')")
 			}()
 			time.Sleep(100 * time.Millisecond)
 			var after int
@@ -492,7 +492,7 @@ func TestPostgresRestoreRequiresEmptyInitializedDestination(t *testing.T) {
 	}
 	// Initialized but non-empty destination: refused, unchanged.
 	init := openStoreAt(t, t.TempDir(), "postgres", url)
-	init.DB().Exec("INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES('adm_occ','occ@example.com','h','2026-01-01T00:00:00Z')")
+	init.DB().Exec("INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES('adm_occ','occ@example.com','occ@example.com','h','2026-01-01T00:00:00Z')")
 	init.Close()
 	before := digestPostgresTables(t, url)
 	if err := Restore(context.Background(), archive, "", RestoreOptions{Provider: store.Postgres, URL: url}); err == nil || !strings.Contains(err.Error(), "not empty") {

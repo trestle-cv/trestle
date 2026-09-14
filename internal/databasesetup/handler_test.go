@@ -51,7 +51,7 @@ func TestExplicitAndCompletedSetupRefuseMutation(t *testing.T) {
 	if w.Code != 409 {
 		t.Fatalf("explicit status=%d", w.Code)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
 	request.Host = "example.test"
 	response := httptest.NewRecorder()
 	admin.ServeHTTP(response, request)

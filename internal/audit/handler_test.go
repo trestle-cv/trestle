@@ -14,7 +14,7 @@ import (
 
 func adminSession(t *testing.T, admin *adminauth.Handler) (*http.Cookie, string) {
 	t.Helper()
-	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", strings.NewReader(`{"email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`))
+	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`))
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")
 	w := httptest.NewRecorder()

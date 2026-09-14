@@ -70,7 +70,7 @@ type adminSession struct {
 
 func setupAdmin(t *testing.T, admin *adminauth.Handler) adminSession {
 	t.Helper()
-	body := strings.NewReader(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
+	body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")

@@ -46,7 +46,7 @@ func setPolicy(t *testing.T, s *store.Store, policy string) {
 // adminCookieCSRF performs first-run setup and returns an admin cookie + CSRF.
 func adminSetup(t *testing.T, s *store.Store, admin *adminauth.Handler) (*http.Cookie, string) {
 	t.Helper()
-	body := strings.NewReader(`{"email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
+	body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")

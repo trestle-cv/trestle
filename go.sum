@@ -2,6 +2,8 @@ github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkp
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/gantry-tools/gantry-core v0.2.0 h1:HSoE/CQjn6D3n4CW4h3o0mMNhe/ZdvIaMT3Z110D53Q=
 github.com/gantry-tools/gantry-core v0.2.0/go.mod h1:aU1Dg8E/T5SCoqbJhrXwqtJELvTfz/7jWjHL1U9egAU=
+github.com/gantry-tools/gantry-core v0.2.1-0.20260914150650-e6c20ace0e08 h1:coDPHn066vJO92ssZumyrzO3ZvSlk+vTJ1QBAF+76Yo=
+github.com/gantry-tools/gantry-core v0.2.1-0.20260914150650-e6c20ace0e08/go.mod h1:aU1Dg8E/T5SCoqbJhrXwqtJELvTfz/7jWjHL1U9egAU=
 github.com/google/pprof v0.0.0-20240409012703-83162a5b38cd h1:gbpYu9NMq8jhDVbvlGkMFWCjLFlqqEZjEmObmhUy6Vo=
 github.com/google/pprof v0.0.0-20240409012703-83162a5b38cd/go.mod h1:kf6iHlnVGwgKolg33glAes7Yg/8iWP8ukqeldJSO7jw=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=

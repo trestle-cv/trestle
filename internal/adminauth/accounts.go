@@ -21,18 +21,18 @@ func trestleAccountPolicy() coreauth.AccountPolicy {
 
 func (p accountPersistence) LoadAccounts() (coreauth.AccountsFile, error) {
 	result := coreauth.AccountsFile{Version: accountSchemaVersion, Accounts: []coreauth.Account{}}
-	rows, err := p.db.Query("SELECT id,email,password_hash,created_at,disabled_at FROM _trestle_admins ORDER BY email")
+	rows, err := p.db.Query("SELECT id,username,email,password_hash,created_at,disabled_at FROM _trestle_admins ORDER BY email")
 	if err != nil {
 		return result, err
 	}
 	type stored struct {
-		id, email, hash, created string
-		disabled                 sql.NullString
+		id, username, email, hash, created string
+		disabled                           sql.NullString
 	}
 	loaded := []stored{}
 	for rows.Next() {
 		var item stored
-		if err := rows.Scan(&item.id, &item.email, &item.hash, &item.created, &item.disabled); err != nil {
+		if err := rows.Scan(&item.id, &item.username, &item.email, &item.hash, &item.created, &item.disabled); err != nil {
 			rows.Close()
 			return result, err
 		}
@@ -53,8 +53,8 @@ func (p accountPersistence) LoadAccounts() (coreauth.AccountsFile, error) {
 			return result, err
 		}
 		result.Accounts = append(result.Accounts, coreauth.Account{
-			ID: item.id, DisplayName: item.email, Enabled: !item.disabled.Valid, Roles: roles, CreatedAt: createdAt,
-			Identities: []coreauth.Identity{{ID: "pwd_" + item.id, Type: "password", Username: item.email, Email: item.email, PasswordHash: item.hash, Enabled: true}},
+			ID: item.id, DisplayName: item.username, Enabled: !item.disabled.Valid, Roles: roles, CreatedAt: createdAt,
+			Identities: []coreauth.Identity{{ID: "pwd_" + item.id, Type: "password", Username: item.username, Email: item.email, PasswordHash: item.hash, Enabled: true}},
 		})
 	}
 	return result, nil
@@ -138,9 +138,9 @@ func (p accountPersistence) SaveAccounts(value coreauth.AccountsFile) error {
 				disabled = time.Now().UTC().Format(time.RFC3339Nano)
 			}
 			if existing[account.ID] {
-				_, err = tx.Exec("UPDATE _trestle_admins SET email=?,password_hash=?,disabled_at=? WHERE id=?", identity.Username, identity.PasswordHash, disabled, account.ID)
+				_, err = tx.Exec("UPDATE _trestle_admins SET username=?,email=?,password_hash=?,disabled_at=? WHERE id=?", identity.Username, identity.Email, identity.PasswordHash, disabled, account.ID)
 			} else {
-				_, err = tx.Exec("INSERT INTO _trestle_admins(id,email,password_hash,created_at,disabled_at) VALUES(?,?,?,?,?)", account.ID, identity.Username, identity.PasswordHash, account.CreatedAt.Format(time.RFC3339Nano), disabled)
+				_, err = tx.Exec("INSERT INTO _trestle_admins(id,username,email,password_hash,created_at,disabled_at) VALUES(?,?,?,?,?,?)", account.ID, identity.Username, identity.Email, identity.PasswordHash, account.CreatedAt.Format(time.RFC3339Nano), disabled)
 			}
 			if err != nil {
 				return err

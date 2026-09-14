@@ -24,7 +24,7 @@ func TestRunResetAuthUsesInstalledServiceData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := adminauth.New(db.DB(), "sqlite").SetupAdministrator(context.Background(), "admin@example.com", "correct horse battery", "closed"); err != nil {
+	if err := adminauth.New(db.DB(), "sqlite").SetupAdministrator(context.Background(), "admin", "admin@example.com", "correct horse battery", "closed"); err != nil {
 		db.Close()
 		t.Fatal(err)
 	}

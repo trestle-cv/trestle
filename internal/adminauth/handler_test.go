@@ -18,7 +18,7 @@ import (
 func TestSetupGuardBlocksAdministratorCreationUntilDatabaseRestart(t *testing.T) {
 	h := testHandler(t, "sqlite")
 	h.SetSetupGuard(func(context.Context) error { return errors.New("restart required") })
-	r := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
+	r := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")
 	w := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestTrustedHTTPSIssuesSecureCookie(t *testing.T) {
 	for _, provider := range storetest.Providers(t) {
 		t.Run(provider, func(t *testing.T) {
 			h := testHandler(t, provider)
-			r := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
+			r := httptest.NewRequest(http.MethodPost, "/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"mudblood","applicationRegistrationPolicy":"closed"}`))
 			r.Host = "example.test"
 			r.Header.Set("Origin", "https://example.test")
 			r = requestmeta.With(r, "https", "203.0.113.9")
@@ -96,7 +96,7 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 			if !strings.Contains(w.Body.String(), "true") {
 				t.Fatal(w.Body.String())
 			}
-			w = request(t, h, "POST", "/admin/v1/setup", credentials{Email: "Admin@Example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
+			w = request(t, h, "POST", "/admin/v1/setup", credentials{Username: "admin", Email: "Admin@Example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
 			if w.Code != 200 {
 				t.Fatalf("setup: %d %s", w.Code, w.Body.String())
 			}
@@ -105,7 +105,7 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 			if err := json.NewDecoder(w.Body).Decode(&session); err != nil {
 				t.Fatal(err)
 			}
-			w = request(t, h, "POST", "/admin/v1/setup", credentials{Email: "other@example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
+			w = request(t, h, "POST", "/admin/v1/setup", credentials{Username: "admin", Email: "other@example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
 			if w.Code != 409 {
 				t.Fatalf("second setup: %d", w.Code)
 			}
@@ -121,11 +121,11 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 			if !strings.Contains(w.Body.String(), "false") {
 				t.Fatal("revoked session remained active")
 			}
-			w = request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "wrong password"}, nil, "")
+			w = request(t, h, "POST", "/admin/v1/session", credentials{Username: "admin", Email: "admin@example.com", Password: "wrong password"}, nil, "")
 			if w.Code != 401 || !strings.Contains(w.Body.String(), "invalid_credentials") {
 				t.Fatalf("bad login: %d %s", w.Code, w.Body.String())
 			}
-			w = request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "correct horse battery staple"}, nil, "")
+			w = request(t, h, "POST", "/admin/v1/session", credentials{Username: "admin", Email: "admin@example.com", Password: "correct horse battery staple"}, nil, "")
 			if w.Code != 200 {
 				t.Fatalf("login: %d %s", w.Code, w.Body.String())
 			}
@@ -135,7 +135,7 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 
 func TestSetupAdministratorGetsSharedCapabilitiesAndManageRequiresCSRF(t *testing.T) {
 	h := testHandler(t, "sqlite")
-	setup := request(t, h, http.MethodPost, "/admin/v1/setup", credentials{Email: "admin@example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
+	setup := request(t, h, http.MethodPost, "/admin/v1/setup", credentials{Username: "admin", Email: "admin@example.com", Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"}, nil, "")
 	if setup.Code != http.StatusOK {
 		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
 	}
@@ -149,10 +149,10 @@ func TestSetupAdministratorGetsSharedCapabilitiesAndManageRequiresCSRF(t *testin
 	if _, ok := h.AuthorizeCapability(r, false, "accounts.manage"); !ok {
 		t.Fatal("setup administrator lacks shared wildcard capability")
 	}
-	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, ""); got.Code != http.StatusForbidden {
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Username: "user", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, ""); got.Code != http.StatusForbidden {
 		t.Fatalf("mutation without CSRF=%d", got.Code)
 	}
-	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusNoContent {
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Username: "user", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusNoContent {
 		t.Fatalf("create=%d %s", got.Code, got.Body.String())
 	}
 	if got := request(t, h, http.MethodGet, "/admin/v1/manage/users", nil, cookie, ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), "user@example.com") {
@@ -164,14 +164,14 @@ func TestAdministratorCanChangeOwnPassword(t *testing.T) {
 	for _, provider := range storetest.Providers(t) {
 		t.Run(provider, func(t *testing.T) {
 			h := testHandler(t, provider)
-			setup := request(t, h, "POST", "/admin/v1/setup", credentials{Email: "admin@example.com", Password: "old password", ApplicationRegistrationPolicy: "closed"}, nil, "")
+			setup := request(t, h, "POST", "/admin/v1/setup", credentials{Username: "admin", Email: "admin@example.com", Password: "old password", ApplicationRegistrationPolicy: "closed"}, nil, "")
 			cookie := setup.Result().Cookies()[0]
 			var session sessionResponse
 			if err := json.NewDecoder(setup.Body).Decode(&session); err != nil {
 				t.Fatal(err)
 			}
 
-			second := request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "old password"}, nil, "")
+			second := request(t, h, "POST", "/admin/v1/session", credentials{Username: "admin", Email: "admin@example.com", Password: "old password"}, nil, "")
 			secondCookie := second.Result().Cookies()[0]
 			withoutCSRF := request(t, h, "POST", "/admin/v1/password", passwordChange{CurrentPassword: "old password", NewPassword: "new password", ConfirmPassword: "new password"}, cookie, "")
 			if withoutCSRF.Code != http.StatusForbidden {
@@ -195,10 +195,10 @@ func TestAdministratorCanChangeOwnPassword(t *testing.T) {
 			if other := request(t, h, "GET", "/admin/v1/session", nil, secondCookie, ""); !strings.Contains(other.Body.String(), "false") {
 				t.Fatal("other session remained active")
 			}
-			if oldLogin := request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "old password"}, nil, ""); oldLogin.Code != http.StatusUnauthorized {
+			if oldLogin := request(t, h, "POST", "/admin/v1/session", credentials{Username: "admin", Email: "admin@example.com", Password: "old password"}, nil, ""); oldLogin.Code != http.StatusUnauthorized {
 				t.Fatalf("old password login: %d", oldLogin.Code)
 			}
-			if newLogin := request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "new password"}, nil, ""); newLogin.Code != http.StatusOK {
+			if newLogin := request(t, h, "POST", "/admin/v1/session", credentials{Username: "admin", Email: "admin@example.com", Password: "new password"}, nil, ""); newLogin.Code != http.StatusOK {
 				t.Fatalf("new password login: %d %s", newLogin.Code, newLogin.Body.String())
 			}
 		})
@@ -215,7 +215,7 @@ func TestCompetingSetupCreatesOneAdministrator(t *testing.T) {
 			for i := 0; i < 8; i++ {
 				go func(n int) {
 					<-start
-					codes <- rawRequest(h, "POST", "/admin/v1/setup", credentials{Email: fmt.Sprintf("admin%d@example.com", n), Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"})
+					codes <- rawRequest(h, "POST", "/admin/v1/setup", credentials{Username: "admin", Email: fmt.Sprintf("admin%d@example.com", n), Password: "correct horse battery staple", ApplicationRegistrationPolicy: "closed"})
 				}(i)
 			}
 			close(start)
@@ -243,11 +243,11 @@ func TestSetupValidationAndOrigin(t *testing.T) {
 	for _, provider := range storetest.Providers(t) {
 		t.Run(provider, func(t *testing.T) {
 			h := testHandler(t, provider)
-			w := request(t, h, "POST", "/admin/v1/setup", credentials{Email: "bad", Password: "short", ApplicationRegistrationPolicy: "closed"}, nil, "")
+			w := request(t, h, "POST", "/admin/v1/setup", credentials{Username: "admin", Email: "bad", Password: "short", ApplicationRegistrationPolicy: "closed"}, nil, "")
 			if w.Code != 422 {
 				t.Fatalf("got %d", w.Code)
 			}
-			r := httptest.NewRequest("POST", "/admin/v1/setup", strings.NewReader(`{"email":"a@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`))
+			r := httptest.NewRequest("POST", "/admin/v1/setup", strings.NewReader(`{"username":"admin","email":"a@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`))
 			r.Host = "example.test"
 			r.Header.Set("Origin", "https://evil.test")
 			w = httptest.NewRecorder()

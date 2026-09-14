@@ -21,7 +21,7 @@ func jobsFixture(t *testing.T, provider string) (*Handler, *http.Cookie, string)
 	t.Helper()
 	s := storetest.Open(t, provider)
 	admin := adminauth.New(s.DB(), string(s.Provider()))
-	body := strings.NewReader(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
+	body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")
@@ -146,7 +146,7 @@ func TestJobsEndpointQueryFailureIsStructured(t *testing.T) {
 			// faulting executor.
 			s := storetest.Open(t, provider)
 			admin := adminauth.New(s.DB(), string(s.Provider()))
-			body := strings.NewReader(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
+			body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
 			r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 			r.Host = "example.test"
 			r.Header.Set("Origin", "http://example.test")

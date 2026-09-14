@@ -46,7 +46,7 @@ func TestRulesStorageAndSimulation(t *testing.T) {
 			var csrf string
 			{
 				var b bytes.Buffer
-				json.NewEncoder(&b).Encode(map[string]any{"email": "admin@example.com", "password": "1234567", "applicationRegistrationPolicy": "closed"})
+				json.NewEncoder(&b).Encode(map[string]any{"username": "admin", "email": "admin@example.com", "password": "1234567", "applicationRegistrationPolicy": "closed"})
 				r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", &b)
 				r.Host = "example.test"
 				r.Header.Set("Origin", "http://example.test")

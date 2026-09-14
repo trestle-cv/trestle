@@ -22,7 +22,7 @@ func setupTest(t *testing.T, provider string) (*Handler, authSession) {
 	t.Helper()
 	s := storetest.Open(t, provider)
 	auth := adminauth.New(s.DB(), string(s.Provider()))
-	body := bytes.NewBufferString(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
+	body := bytes.NewBufferString(`{"username":"admin","email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")

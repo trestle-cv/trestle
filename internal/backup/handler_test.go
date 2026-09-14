@@ -27,7 +27,7 @@ func testHandler(t *testing.T) (*Handler, string, *http.Cookie) {
 	token, csrf := "test-session-token", "test-csrf-token"
 	tokenHash, csrfHash := sha256.Sum256([]byte(token)), sha256.Sum256([]byte(csrf))
 	now := time.Now().UTC()
-	if _, err := database.DB().Exec(`INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES('adm_test','admin@example.test','unused',?)`, now.Format(time.RFC3339Nano)); err != nil {
+	if _, err := database.DB().Exec(`INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES('adm_test','admin@example.test','admin@example.test','unused',?)`, now.Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.DB().Exec(`INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES('adm_test','administrator')`); err != nil {

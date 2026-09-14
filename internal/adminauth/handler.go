@@ -32,6 +32,7 @@ type Handler struct {
 	setupGuard      func(context.Context) error
 }
 type credentials struct {
+	Username                      string `json:"username"`
 	Email                         string `json:"email"`
 	Password                      string `json:"password"`
 	ApplicationRegistrationPolicy string `json:"applicationRegistrationPolicy"`
@@ -166,10 +167,11 @@ func (h *Handler) SetupRequired(ctx context.Context) (bool, error) {
 }
 
 // SetupAdministrator performs first-run setup for trusted local automation.
-func (h *Handler) SetupAdministrator(ctx context.Context, email, password, policy string) error {
+func (h *Handler) SetupAdministrator(ctx context.Context, username, email, password, policy string) error {
+	username = strings.TrimSpace(username)
 	email, ok := normalizeEmail(email)
-	if !ok {
-		return errors.New("valid administrator email required")
+	if !ok || username == "" {
+		return errors.New("valid administrator username and email required")
 	}
 	hash, err := hashPassword(password)
 	if err != nil {
@@ -198,7 +200,7 @@ func (h *Handler) SetupAdministrator(ctx context.Context, email, password, polic
 	id, _ := randomToken(18)
 	now := h.now().UTC().Format(time.RFC3339Nano)
 	adminID := "adm_" + id
-	if _, err = tx.ExecContext(ctx, "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", adminID, email, hash, now); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES(?,?,?,?,?)", adminID, username, email, hash, now); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO _trestle_admin_roles(admin_id,role_id) VALUES(?,?)", adminID, "administrator"); err != nil {
@@ -228,8 +230,9 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+	username := strings.TrimSpace(input.Username)
 	email, ok := normalizeEmail(input.Email)
-	if !ok {
+	if !ok || username == "" {
 		writeError(w, 422, "validation_failed", "The request could not be applied.")
 		return
 	}
@@ -261,7 +264,7 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 	id, _ := randomToken(18)
 	now := h.now().UTC().Format(time.RFC3339Nano)
 	adminID := "adm_" + id
-	if _, err := tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,email,password_hash,created_at) VALUES(?,?,?,?)", adminID, email, hash, now); err != nil {
+	if _, err := tx.ExecContext(r.Context(), "INSERT INTO _trestle_admins(id,username,email,password_hash,created_at) VALUES(?,?,?,?,?)", adminID, username, email, hash, now); err != nil {
 		writeError(w, 409, "setup_complete", "Initial setup has already been completed.")
 		return
 	}
@@ -310,10 +313,13 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	email, _ := normalizeEmail(input.Email)
-	account, _, valid := h.accounts.AuthenticatePassword(email, input.Password)
+	identifier := strings.TrimSpace(input.Username)
+	if identifier == "" {
+		identifier = strings.TrimSpace(input.Email)
+	}
+	account, _, valid := h.accounts.AuthenticatePassword(identifier, input.Password)
 	if !valid {
-		writeError(w, 401, "invalid_credentials", "The email or password is incorrect.")
+		writeError(w, 401, "invalid_credentials", "The username or email or password is incorrect.")
 		return
 	}
 	h.limiter.Clear(key)

@@ -159,13 +159,13 @@ func TestFirstRunPostgresWorkflow(t *testing.T) {
 			}
 
 			// 4. The seven-character password minimum is enforced.
-			short := serve(nil, http.MethodPost, "/admin/v1/setup", `{"email":"admin@example.com","password":"123456","applicationRegistrationPolicy":"closed"}`, "http://example.test")
+			short := serve(nil, http.MethodPost, "/admin/v1/setup", `{"username":"admin","email":"admin@example.com","password":"123456","applicationRegistrationPolicy":"closed"}`, "http://example.test")
 			if short.Code != http.StatusUnprocessableEntity {
 				t.Fatalf("short password status=%d body=%s", short.Code, short.Body.String())
 			}
 
 			// 5. Create the first administrator and confirm setup closes.
-			created := serve(nil, http.MethodPost, "/admin/v1/setup", `{"email":"admin@example.com","password":"sevenchars","applicationRegistrationPolicy":"closed"}`, "http://example.test")
+			created := serve(nil, http.MethodPost, "/admin/v1/setup", `{"username":"admin","email":"admin@example.com","password":"sevenchars","applicationRegistrationPolicy":"closed"}`, "http://example.test")
 			if created.Code != http.StatusOK {
 				t.Fatalf("setup status=%d body=%s", created.Code, created.Body.String())
 			}
@@ -173,7 +173,7 @@ func TestFirstRunPostgresWorkflow(t *testing.T) {
 			if status.SetupRequired {
 				t.Fatal("setup must be complete after the first administrator")
 			}
-			if second := serve(nil, http.MethodPost, "/admin/v1/setup", `{"email":"other@example.com","password":"sevenchars","applicationRegistrationPolicy":"closed"}`, "http://example.test"); second.Code != http.StatusConflict {
+			if second := serve(nil, http.MethodPost, "/admin/v1/setup", `{"username":"admin","email":"other@example.com","password":"sevenchars","applicationRegistrationPolicy":"closed"}`, "http://example.test"); second.Code != http.StatusConflict {
 				t.Fatalf("second setup status=%d body=%s", second.Code, second.Body.String())
 			}
 			if closed := serve(nil, http.MethodGet, "/admin/v1/database/setup", "", ""); closed.Code != http.StatusConflict {

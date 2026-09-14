@@ -27,7 +27,7 @@ func setup(t *testing.T, provider string) fixture {
 	dir := t.TempDir()
 	s := storetest.Open(t, provider)
 	admin := adminauth.New(s.DB(), string(s.Provider()))
-	body := strings.NewReader(`{"email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
+	body := strings.NewReader(`{"username":"admin","email":"admin@example.com","password":"1234567","applicationRegistrationPolicy":"closed"}`)
 	r := httptest.NewRequest("POST", "http://example.test/admin/v1/setup", body)
 	r.Host = "example.test"
 	r.Header.Set("Origin", "http://example.test")

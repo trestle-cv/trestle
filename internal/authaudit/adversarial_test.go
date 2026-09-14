@@ -420,7 +420,7 @@ func issueAdminCookie(t *testing.T, provider string, secure bool) *http.Cookie {
 	if secure {
 		origin = "https://example.test"
 	}
-	r := httptest.NewRequest("POST", origin+"/admin/v1/setup", bytes.NewBufferString(`{"email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`))
+	r := httptest.NewRequest("POST", origin+"/admin/v1/setup", bytes.NewBufferString(`{"username":"admin","email":"admin@example.com","password":"correct horse battery staple","applicationRegistrationPolicy":"closed"}`))
 	r.Host = "example.test"
 	r.Header.Set("Origin", origin)
 	if secure {

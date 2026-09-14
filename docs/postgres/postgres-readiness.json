@@ -5,7 +5,7 @@
   "campaign": "public-preview",
   "provider": "postgres",
   "status": "implemented",
-  "currentSchemaVersion": 22,
+  "currentSchemaVersion": 23,
   "driver": "github.com/lib/pq",
   "supportedServerVersions": [
     16,

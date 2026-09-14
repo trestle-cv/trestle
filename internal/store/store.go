@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CurrentVersion = 22
+const CurrentVersion = 23
 
 type Store struct {
 	db                    *sql.DB
@@ -398,6 +398,9 @@ CREATE TABLE _trestle_propagation_history (
 CREATE INDEX _trestle_propagation_history_created ON _trestle_propagation_history(created_at DESC);
 `}, {22, "propagation scheduling state", `
 ALTER TABLE _trestle_propagation_profiles ADD COLUMN last_run_at TEXT;
+`}, {23, "administrator username", `
+ALTER TABLE _trestle_admins ADD COLUMN username TEXT;
+UPDATE _trestle_admins SET username = substr(email, 1, instr(email, '@') - 1) WHERE username IS NULL OR trim(username) = '';
 `}}
 
 func Open(ctx context.Context, dataDir string) (*Store, error) {

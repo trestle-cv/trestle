@@ -22,7 +22,7 @@ func setup(t *testing.T, provider string) (*Handler, session) {
 	t.Helper()
 	s := storetest.Open(t, provider)
 	admin := adminauth.New(s.DB(), string(s.Provider()))
-	w := request(t, admin, session{}, "POST", "/admin/v1/setup", map[string]any{"email": "admin@example.com", "password": "1234567", "applicationRegistrationPolicy": "closed"})
+	w := request(t, admin, session{}, "POST", "/admin/v1/setup", map[string]any{"username": "admin", "email": "admin@example.com", "password": "1234567", "applicationRegistrationPolicy": "closed"})
 	var out struct {
 		CSRF string `json:"csrfToken"`
 	}
