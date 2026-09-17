@@ -17,6 +17,8 @@ import (
 
 	"github.com/gantry-tools/gantry-core/automation"
 	coreprop "github.com/gantry-tools/gantry-core/propagation"
+	corerepl "github.com/gantry-tools/gantry-core/replication"
+	"github.com/hashicorp/raft"
 
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/apidocs"
@@ -39,6 +41,7 @@ import (
 	productprop "github.com/trestle-cv/trestle/internal/propagation"
 	"github.com/trestle-cv/trestle/internal/records"
 	"github.com/trestle-cv/trestle/internal/rules"
+	replruntime "github.com/trestle-cv/trestle/internal/runtime"
 	"github.com/trestle-cv/trestle/internal/server"
 	"github.com/trestle-cv/trestle/internal/service"
 	"github.com/trestle-cv/trestle/internal/store"
@@ -241,10 +244,88 @@ func main() {
 	adminRoutes := http.NewServeMux()
 	clusterService := clusterapi.New(database.DB())
 	clusterTransport := clusterapi.NewTransport(database.DB(), clusterService, nil)
+	var replicatedRuntime *replruntime.Replicated
+	if cfg.Replication.Enabled {
+		if database.Provider() != store.SQLite {
+			logger.Error("clustering currently requires sqlite")
+			os.Exit(1)
+		}
+		if _, e := clusterService.EnsureIdentity(context.Background(), buildinfo.Current().Version); e != nil {
+			logger.Error("cluster identity initialization failed", "error", e)
+			os.Exit(1)
+		}
+		tlsConfig, e := corerepl.LoadTLSConfig(cfg.Replication.TLSCert, cfg.Replication.TLSKey, cfg.Replication.TLSCA)
+		if e != nil && !cfg.Replication.InsecurePlaintext {
+			logger.Error("replication TLS initialization failed", "error", e)
+			os.Exit(1)
+		}
+		replicatedRuntime, e = replruntime.NewReplication(context.Background(), replruntime.ReplicationOptions{DB: database.DB(), DataDir: cfg.DataDir, NodeID: cfg.Replication.NodeID, Address: cfg.Replication.Listen, Bootstrap: cfg.Replication.Bootstrap, TLS: tlsConfig, Insecure: cfg.Replication.InsecurePlaintext, Transport: clusterTransport, Timing: corerepl.ProductionTiming()})
+		if e != nil {
+			logger.Error("replication initialization failed", "error", e)
+			os.Exit(1)
+		}
+		defer replicatedRuntime.Close()
+		collectionAdmin.SetMutationAuthority(replicatedRuntime.Controller)
+		recordAPI.SetMutationAuthority(replicatedRuntime.Controller)
+	}
 	propagationManager := &coreprop.Manager{Adapter: productprop.New(database.DB()), Store: productprop.NewStateStore(database.DB())}
 	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version, Propagation: propagationManager}
 	adminRoutes.Handle("/admin/v1/cluster/", clusterHandler)
 	apiRoutes.Handle("/api/cluster/v1/", clusterHandler)
+	if replicatedRuntime != nil {
+		rr := replicatedRuntime
+		apiRoutes.HandleFunc("/api/cluster/v1/replication/propose", func(w http.ResponseWriter, r *http.Request) {
+			body, _, e := clusterTransport.Authenticate(r, "replication")
+			if e != nil {
+				http.Error(w, "unauthorized", 401)
+				return
+			}
+			var fr corerepl.ForwardRequest
+			if json.Unmarshal(body, &fr) != nil {
+				http.Error(w, "bad request", 400)
+				return
+			}
+			ctx := corerepl.WithRequestID(r.Context(), fr.OpID)
+			res, e := rr.Controller.Propose(ctx, fr.Kind, fr.ObjectID, fr.Revision, fr.Payload)
+			if e != nil {
+				http.Error(w, e.Error(), 503)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(res)
+		})
+		adminRoutes.HandleFunc("/admin/v1/replication/status", func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := admin.Authorize(r, false); !ok {
+				http.Error(w, "unauthorized", 401)
+				return
+			}
+			mode, ready := rr.Controller.State()
+			cfgs, _ := rr.Node.Configuration()
+			_ = json.NewEncoder(w).Encode(map[string]any{"mode": mode.String(), "readiness": ready.String(), "state": rr.Node.State().String(), "leader": func() string { _, id := rr.Node.Leader(); return string(id) }(), "servers": cfgs})
+		})
+		adminRoutes.HandleFunc("/admin/v1/replication/join", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method", 405)
+				return
+			}
+			if _, ok := admin.Authorize(r, true); !ok {
+				http.Error(w, "forbidden", 403)
+				return
+			}
+			var in struct {
+				NodeID  string `json:"node_id"`
+				Address string `json:"address"`
+			}
+			if json.NewDecoder(r.Body).Decode(&in) != nil || in.NodeID == "" || in.Address == "" {
+				http.Error(w, "bad request", 400)
+				return
+			}
+			if e := rr.Node.AddVoter(raft.ServerID(in.NodeID), raft.ServerAddress(in.Address)); e != nil {
+				http.Error(w, e.Error(), 409)
+				return
+			}
+			w.WriteHeader(204)
+		})
+	}
 	databaseSetup := databasesetup.New(admin, databasesetup.Options{DataDir: cfg.DataDir, Current: database.Provider(), Explicit: cfg.DatabaseExplicit || cfg.DatabaseConfigured, MaxOpen: cfg.DatabaseMaxOpen, MaxIdle: cfg.DatabaseMaxIdle, ConnectTimeout: cfg.DatabaseConnectTimeout, ConnMaxLifetime: cfg.DatabaseConnMaxLifetime})
 	adminRoutes.Handle("/admin/v1/database/setup", databaseSetup)
 	adminRoutes.Handle("/admin/v1/collections", collectionAdmin)
