@@ -42,6 +42,18 @@ type Config struct {
 	DatabaseConnMaxLifetime time.Duration
 	DatabaseExplicit        bool
 	DatabaseConfigured      bool
+	Replication             ReplicationConfig
+}
+
+type ReplicationConfig struct {
+	Enabled           bool
+	NodeID            string
+	Bootstrap         bool
+	Listen            string
+	TLSCert           string
+	TLSKey            string
+	TLSCA             string
+	InsecurePlaintext bool
 }
 
 func Defaults() Config {
@@ -94,6 +106,32 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 	cfg.AWSRegion = getenv("TRESTLE_AWS_REGION")
 	cfg.AWSAccessKey = getenv("TRESTLE_AWS_ACCESS_KEY")
 	cfg.AWSSecretKey = getenv("TRESTLE_AWS_SECRET_KEY")
+	if v := getenv("TRESTLE_REPLICATION_ENABLED"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("TRESTLE_REPLICATION_ENABLED: %w", err)
+		}
+		cfg.Replication.Enabled = b
+	}
+	cfg.Replication.NodeID = getenv("TRESTLE_REPLICATION_NODE_ID")
+	if v := getenv("TRESTLE_REPLICATION_BOOTSTRAP"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("TRESTLE_REPLICATION_BOOTSTRAP: %w", err)
+		}
+		cfg.Replication.Bootstrap = b
+	}
+	cfg.Replication.Listen = getenv("TRESTLE_REPLICATION_LISTEN")
+	cfg.Replication.TLSCert = getenv("TRESTLE_REPLICATION_TLS_CERT")
+	cfg.Replication.TLSKey = getenv("TRESTLE_REPLICATION_TLS_KEY")
+	cfg.Replication.TLSCA = getenv("TRESTLE_REPLICATION_TLS_CA")
+	if v := getenv("TRESTLE_REPLICATION_INSECURE_PLAINTEXT"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("TRESTLE_REPLICATION_INSECURE_PLAINTEXT: %w", err)
+		}
+		cfg.Replication.InsecurePlaintext = b
+	}
 	if value := getenv("TRESTLE_TRUSTED_PROXIES"); value != "" {
 		prefixes, err := parsePrefixes(value)
 		if err != nil {
