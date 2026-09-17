@@ -17,7 +17,7 @@ import (
 
 const ProtocolVersion = core.ProtocolVersion
 
-var DefaultCapabilities = []string{"cluster.health", "cluster.trestle.summary", "cluster.trestle.compare", "cluster.propagation"}
+var DefaultCapabilities = []string{"cluster.health", "cluster.trestle.summary", "cluster.trestle.compare", "cluster.propagation", "replication"}
 
 type Service struct {
 	db  store.Executor
