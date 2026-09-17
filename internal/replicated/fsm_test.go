@@ -277,3 +277,34 @@ func (m *memSink) ID() string                  { return "mem" }
 type readerCloser struct{ *bytes.Reader }
 
 func (r *readerCloser) Close() error { return nil }
+
+// TestFSMIdempotencyMappingIsConsensusOwned proves a create's caller idempotency
+// key is materialized into the replicated idempotency table so a retry on any
+// node can replay the original result instead of re-proposing a fresh record id.
+func TestFSMIdempotencyMappingIsConsensusOwned(t *testing.T) {
+	f := testFSM(t)
+	applyCollectionAt(t, f, "people")
+	rec := testRecord("r1", 1, "A", 1)
+	rec.IdempotencyKey = "create-cust-1"
+	if e := errOf(applyLog(t, f, 2, 1, putOp("op-idem", "r1", 1, rec))); e != nil {
+		t.Fatalf("create with idempotency key failed: %v", e)
+	}
+	var key string
+	if e := f.db.QueryRow(`SELECT idempotency_key FROM _trestle_record_idempotency WHERE collection_id='col_test1' AND record_id='r1'`).Scan(&key); e != nil || key != "create-cust-1" {
+		t.Fatalf("idempotency mapping not materialized: %q err=%v", key, e)
+	}
+	// Deleting the record removes the mapping so the key can be reused later.
+	del := testRecord("r1", 1, "A", 1)
+	if e := errOf(applyLog(t, f, 3, 1, deleteOp("op-del", del))); e != nil {
+		t.Fatalf("delete failed: %v", e)
+	}
+	var n int
+	if e := f.db.QueryRow(`SELECT COUNT(*) FROM _trestle_record_idempotency WHERE record_id='r1'`).Scan(&n); e != nil || n != 0 {
+		t.Fatalf("idempotency mapping not removed on delete: n=%d", n)
+	}
+}
+
+func deleteOp(id string, p RecordPayload) replication.Operation {
+	b, _ := json.Marshal(p)
+	return replication.Operation{Version: replication.Version, Product: "trestle", Kind: KindRecordDelete, ID: id, ObjectID: p.RecordID, Revision: p.Version, Payload: b}
+}

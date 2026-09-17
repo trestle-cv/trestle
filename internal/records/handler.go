@@ -47,6 +47,7 @@ type ReplicatedRecord struct {
 	CreatedAt    string         `json:"created_at"`
 	UpdatedAt    string         `json:"updated_at"`
 	Values       map[string]any `json:"values"`
+	IdempotencyKey string        `json:"idempotency_key,omitempty"`
 }
 type MutationAuthority interface {
 	PutRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
@@ -289,7 +290,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 			return
 		}
 		now := h.now().UTC().Format(time.RFC3339Nano)
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values}
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values, IdempotencyKey: key}
 		ctx := r.Context()
 		if key != "" {
 			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)

@@ -59,6 +59,11 @@ type RecordPayload struct {
 	CreatedAt    string         `json:"created_at"`
 	UpdatedAt    string         `json:"updated_at"`
 	Values       map[string]any `json:"values"`
+	// IdempotencyKey is the caller-provided key recorded at create time. It is
+	// consensus-owned so any node can replay the original result for a retry
+	// instead of re-proposing (which would build a new record id and trip the
+	// operation-id digest conflict).
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 // FSM deterministically materializes consensus-owned Trestle collection
@@ -389,6 +394,11 @@ func putRecord(ctx context.Context, tx store.Transaction, dialect store.Dialect,
 		if _, e := tx.ExecContext(ctx, `INSERT INTO `+table+`(`+join(cols)+`) VALUES(`+join(marks)+`)`, args...); e != nil {
 			return e
 		}
+		if p.IdempotencyKey != "" {
+			if _, e := tx.ExecContext(ctx, `INSERT INTO `+q("_trestle_record_idempotency")+`(collection_id,idempotency_key,record_id,created_at) VALUES(?,?,?,?)`, p.CollectionID, p.IdempotencyKey, p.RecordID, p.CreatedAt); e != nil {
+				return fmt.Errorf("%w: idempotency key %q reused", ErrStalePrecondition, p.IdempotencyKey)
+			}
+		}
 		return nil
 	}
 	if err != nil {
@@ -430,6 +440,9 @@ func deleteRecord(ctx context.Context, tx store.Transaction, p RecordPayload) er
 		return fmt.Errorf("%w: record %q stale delete: expected version %d, current %d", ErrStalePrecondition, p.RecordID, p.Version, current)
 	}
 	if _, e := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE _id=? AND _version=?`, p.RecordID, p.Version); e != nil {
+		return e
+	}
+	if _, e := tx.ExecContext(ctx, `DELETE FROM `+q("_trestle_record_idempotency")+` WHERE collection_id=? AND record_id=?`, p.CollectionID, p.RecordID); e != nil {
 		return e
 	}
 	return nil
