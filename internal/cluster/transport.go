@@ -131,3 +131,10 @@ func (r RemoteReader) get(ctx context.Context, nodeID, path, capability string, 
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, core.MaxRequestBytes)).Decode(out)
 }
+
+// SetHTTPClient installs the client used by authenticated cluster RPCs.
+func (t *Transport) SetHTTPClient(c *http.Client) {
+	if c != nil {
+		t.client = c
+	}
+}
