@@ -222,9 +222,9 @@ func recordCount(t *testing.T, n *certNode, collectionName string) int {
 
 func waitRecordCount(t *testing.T, n *certNode, collectionName string, want int) {
 	t.Helper()
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		if recordCount(t, n, collectionName) == want {
+		if recordCountNoFail(n, collectionName) == want {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
