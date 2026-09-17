@@ -3,6 +3,7 @@ package replicated
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/gantry-tools/gantry-core/replication"
@@ -307,4 +308,35 @@ func TestFSMIdempotencyMappingIsConsensusOwned(t *testing.T) {
 func deleteOp(id string, p RecordPayload) replication.Operation {
 	b, _ := json.Marshal(p)
 	return replication.Operation{Version: replication.Version, Product: "trestle", Kind: KindRecordDelete, ID: id, ObjectID: p.RecordID, Revision: p.Version, Payload: b}
+}
+
+// TestFSMProcessScopedOpIDsDoNotCollideAfterRestart proves that a restart of
+// the same node cannot collide with its own durable applied map: pre-restart
+// operations use the node counter format and post-restart operations use the
+// process-scoped epoch format, so a node re-proposing after a restart does not
+// trip the same-ID/different-payload idempotency conflict.
+func TestFSMProcessScopedOpIDsDoNotCollideAfterRestart(t *testing.T) {
+	s := storetest.Open(t, "sqlite")
+	f, e := NewFSM(s.DB())
+	if e != nil {
+		t.Fatal(e)
+	}
+	applyCollectionAt(t, f, "people")
+	// Pre-restart: node-scoped op ids trestle-<node>-1..3 (the previous format).
+	for i := 1; i <= 3; i++ {
+		rec := testRecord(fmt.Sprintf("r%d", i), 1, "A", float64(i))
+		if e := errOf(applyLog(t, f, uint64(i+1), 1, putOp(fmt.Sprintf("trestle-nodeA-%d", i), fmt.Sprintf("r%d", i), 1, rec))); e != nil {
+			t.Fatalf("pre-restart apply %d failed: %v", i, e)
+		}
+	}
+	// Restart: a new FSM reconstructs the durable applied map.
+	f2, e := NewFSM(s.DB())
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Post-restart: process-scoped op id must not collide with the durable map.
+	rec := testRecord("r4", 1, "B", 4)
+	if e := errOf(applyLog(t, f2, 6, 1, putOp("trestle-nodeA-epoch1-1", "r4", 1, rec))); e != nil {
+		t.Fatalf("post-restart process-scoped op must apply cleanly: %v", e)
+	}
 }
