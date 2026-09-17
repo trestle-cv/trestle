@@ -2,6 +2,7 @@ package records
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/appauth"
 	"github.com/trestle-cv/trestle/internal/audit"
@@ -35,7 +37,24 @@ type Handler struct {
 	events      *events.Handler
 	auditor     *audit.Handler
 	now         func() time.Time
+	authority   MutationAuthority
 }
+
+type ReplicatedRecord struct {
+	CollectionID string         `json:"collection_id"`
+	RecordID     string         `json:"record_id"`
+	Version      int64          `json:"version"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+	Values       map[string]any `json:"values"`
+}
+type MutationAuthority interface {
+	PutRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
+	DeleteRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
+}
+
+func (h *Handler) SetMutationAuthority(a MutationAuthority) { h.authority = a }
+
 type field struct {
 	id, name, kind string
 	required       bool
@@ -254,6 +273,36 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 	var in createInput
 	if !decode(w, r, &in) {
 		return
+	}
+	if h.authority != nil {
+		values, details := validateValues(s, in.Values)
+		if len(details) > 0 {
+			writeValidation(w, details)
+			return
+		}
+		id := in.ID
+		if id == "" {
+			id = newID("rec_")
+		}
+		if !validID(id) {
+			writeValidation(w, []httperr.Field{{Path: "id", Code: "invalid"}})
+			return
+		}
+		now := h.now().UTC().Format(time.RFC3339Nano)
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values}
+		if _, e := h.authority.PutRecord(r.Context(), rr); e == nil {
+			rec, e := h.fetch(r, s, id)
+			if e != nil {
+				writeError(w, 500, "internal_error", e.Error())
+				return
+			}
+			w.Header().Set("ETag", fmt.Sprintf(`"%d"`, rec.Version))
+			writeJSON(w, 201, projectRecord(rec, projection(r)))
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -569,6 +618,22 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, s schema, id st
 		return
 	}
 	now := h.now().UTC().Format(time.RFC3339Nano)
+	if h.authority != nil {
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: version + 1, CreatedAt: current.CreatedAt, UpdatedAt: now, Values: values}
+		if _, e := h.authority.PutRecord(r.Context(), rr); e == nil {
+			rec, e := h.fetch(r, s, id)
+			if e != nil {
+				writeError(w, 500, "internal_error", e.Error())
+				return
+			}
+			w.Header().Set("ETag", fmt.Sprintf(`"%d"`, rec.Version))
+			writeJSON(w, 200, rec)
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
+	}
 	sets := []string{"_version=_version+1", "_updated=?"}
 	args := []any{now}
 	for _, f := range s.fields {
@@ -618,6 +683,16 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, s schema, id st
 	version, ok := ifMatch(w, r)
 	if !ok {
 		return
+	}
+	if h.authority != nil {
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: version}
+		if _, e := h.authority.DeleteRecord(r.Context(), rr); e == nil {
+			w.WriteHeader(204)
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {

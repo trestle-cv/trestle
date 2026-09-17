@@ -150,7 +150,12 @@ func (f *FSM) putRecord(p RecordPayload) error {
 		marks = append(marks, "?")
 	}
 	table := q(collections.PhysicalTableName(p.CollectionID))
-	_, e = f.db.Exec("INSERT INTO "+table+"("+join(cols)+") VALUES("+join(marks)+") ON CONFLICT(_id) DO UPDATE SET _version=excluded._version,_updated=excluded._updated", args...)
+	updates := []string{"_version=excluded._version", "_updated=excluded._updated"}
+	for _, fld := range defs.Fields {
+		col := q(collections.PhysicalColumnName(fld.ID))
+		updates = append(updates, col+"=excluded."+col)
+	}
+	_, e = f.db.Exec("INSERT INTO "+table+"("+join(cols)+") VALUES("+join(marks)+") ON CONFLICT(_id) DO UPDATE SET "+join(updates), args...)
 	return e
 }
 func (f *FSM) deleteRecord(p RecordPayload) error {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/collections"
+	"github.com/trestle-cv/trestle/internal/records"
 	"sync/atomic"
 )
 
@@ -55,4 +56,10 @@ func (c *Controller) PutCollection(ctx context.Context, d collections.Collection
 }
 func (c *Controller) DeleteCollection(ctx context.Context, name string) (*replication.ApplyResult, error) {
 	return c.Propose(ctx, KindCollectionDelete, name, 0, nil)
+}
+func (c *Controller) PutRecord(ctx context.Context, r records.ReplicatedRecord) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindRecordPut, r.RecordID, r.Version, r)
+}
+func (c *Controller) DeleteRecord(ctx context.Context, r records.ReplicatedRecord) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindRecordDelete, r.RecordID, r.Version, r)
 }
