@@ -705,6 +705,64 @@ func TestFiveNodeProductionCertification(t *testing.T) {
 	waitReadyAny(t, snapNode2)
 	waitRecordPresent(t, snapNode2, "col_people", "trail2")
 	waitConvergedEqual(t, rest...)
+
+	// Whole-cluster restart: close all five, restart each over its durable
+	// state, re-point the mesh, and verify election, convergence and a fresh
+	// authoritative mutation.
+	for _, n := range rest {
+		n.rt.Close()
+	}
+	allRestarted := []*certNode{}
+	for _, n := range rest {
+		allRestarted = append(allRestarted, restartNode(t, ctx, ca, n.dir, n.id, string(n.rt.Node.Address()), httpClient))
+	}
+	repairEndpoints(t, allRestarted...)
+	waitAnyLeader(t, allRestarted...)
+	for _, n := range allRestarted {
+		waitReadyAny(t, n)
+	}
+	waitConvergedEqual(t, allRestarted...)
+	restartRec := records.ReplicatedRecord{CollectionID: "col_people", RecordID: "after-full-restart", Version: 1, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Values: map[string]any{"name": "restarted", "age": 12.0}}
+	leaderPut(t, findLeader(t, allRestarted...), ctx, restartRec)
+	for _, n := range allRestarted {
+		waitRecordPresent(t, n, "col_people", "after-full-restart")
+	}
+
+	// Peer disable/revoke against one voter while quorum remains: the healthy
+	// majority continues, the isolated peer cannot originate authoritative
+	// mutations, and re-enabling restores catch-up.
+	var isolated *certNode
+	for _, n := range allRestarted {
+		if n.id == snapNode2.id {
+			isolated = n
+			break
+		}
+	}
+	if isolated == nil {
+		t.Fatal("isolated peer not found after restart")
+	}
+	for _, n := range allRestarted {
+		if n.id != isolated.id {
+			disableMember(t, n, isolated.id)
+		}
+	}
+	quorumOK := records.ReplicatedRecord{CollectionID: "col_people", RecordID: "after-disable", Version: 1, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Values: map[string]any{"name": "quorum", "age": 13.0}}
+	leaderPut(t, findLeader(t, allRestarted...), ctx, quorumOK)
+	// Disable takes effect through the revalidation window; wait until the
+	// isolated peer can no longer reach a quorum before asserting fail-closed.
+	waitReadiness(t, isolated, corerepl.ReadinessNoLeader)
+	expectMutationClosed(t, isolated, ctx, "col_people", "isolated-write")
+	for _, n := range allRestarted {
+		if n.id != isolated.id {
+			enableMember(t, n, isolated.id)
+		}
+	}
+	waitReadyAny(t, isolated)
+	reenabled := records.ReplicatedRecord{CollectionID: "col_people", RecordID: "after-reenable", Version: 1, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Values: map[string]any{"name": "reenabled", "age": 14.0}}
+	leaderPut(t, findLeader(t, allRestarted...), ctx, reenabled)
+	for _, n := range allRestarted {
+		waitRecordPresent(t, n, "col_people", "after-reenable")
+	}
 }
 
 // findLeader returns a leader among nodes, or fails.
@@ -898,4 +956,19 @@ func expectRejected(t *testing.T, fn func() error) {
 		return
 	}
 	t.Fatal("rejection never became non-transient")
+}
+
+// waitReadiness waits until a node reaches a specific readiness.
+func waitReadiness(t *testing.T, n *certNode, want corerepl.Readiness) {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		_, rd := n.rt.Controller.State()
+		if rd == want {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_, rd := n.rt.Controller.State()
+	t.Fatalf("node %s readiness=%s want %s", n.id, rd, want)
 }
