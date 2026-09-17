@@ -11,6 +11,7 @@ import (
 
 	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/hashicorp/raft"
+	"github.com/trestle-cv/trestle/internal/store"
 )
 
 const replicationCapability = "replication"
@@ -23,7 +24,7 @@ type Authenticator struct {
 	now       func() time.Time
 }
 
-func NewAuthenticator(db *sql.DB, protocol int) *Authenticator {
+func NewAuthenticator(db store.Executor, protocol int) *Authenticator {
 	a := &Authenticator{db: db, protocol: protocol, now: time.Now}
 	_ = db.QueryRow(`SELECT node_id,capabilities_json FROM _trestle_cluster_identity WHERE singleton=1`).Scan(&a.localID, &a.localCaps)
 	return a

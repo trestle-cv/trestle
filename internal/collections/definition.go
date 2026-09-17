@@ -190,3 +190,62 @@ func DeleteDefinition(ctx context.Context, db store.Executor, name string) error
 	}
 	return tx.Commit()
 }
+
+// ApplyReplicatedDefinition deterministically materializes a collection definition supplied by consensus.
+// IDs and timestamps are part of the committed payload; no node-local IDs or clocks are consulted.
+func ApplyReplicatedDefinition(ctx context.Context, db store.Executor, def Collection) error {
+	if def.ID == "" || def.Name == "" || def.CreatedAt == "" || def.UpdatedAt == "" {
+		return fmt.Errorf("replicated collection definition is incomplete")
+	}
+	in := input{Name: def.Name, Fields: append([]Field(nil), def.Fields...)}
+	if details := validate(in); len(details) > 0 {
+		return fmt.Errorf("invalid replicated collection definition")
+	}
+	for _, f := range in.Fields {
+		if f.ID == "" {
+			return fmt.Errorf("replicated field id is required")
+		}
+	}
+	before, err := LoadDefinition(ctx, db, def.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		tx, e := db.BeginTx(ctx, nil)
+		if e != nil {
+			return e
+		}
+		defer tx.Rollback()
+		if _, e = tx.ExecContext(ctx, "INSERT INTO _trestle_collections(id,name,kind,created_at,updated_at) VALUES(?,?,?,?,?)", def.ID, def.Name, def.Kind, def.CreatedAt, def.UpdatedAt); e != nil {
+			return e
+		}
+		if e = insertFieldsContext(ctx, tx, db.Dialect(), def.ID, def.CreatedAt, in.Fields); e != nil {
+			return e
+		}
+		if e = createPhysical(ctx, tx, db.Dialect(), def.ID, in.Fields); e != nil {
+			return e
+		}
+		return tx.Commit()
+	}
+	if err != nil {
+		return err
+	}
+	if before.ID != def.ID {
+		return fmt.Errorf("replicated collection id mismatch")
+	}
+	tx, e := db.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	if _, e = tx.ExecContext(ctx, "UPDATE _trestle_collections SET name=?,kind=?,updated_at=? WHERE id=?", def.Name, def.Kind, def.UpdatedAt, def.ID); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, "DELETE FROM _trestle_fields WHERE collection_id=?", def.ID); e != nil {
+		return e
+	}
+	if e = insertFieldsContext(ctx, tx, db.Dialect(), def.ID, def.UpdatedAt, in.Fields); e != nil {
+		return e
+	}
+	if e = rebuildPhysical(ctx, tx, db.Dialect(), def.ID, before.Fields, in.Fields); e != nil {
+		return e
+	}
+	return tx.Commit()
+}
