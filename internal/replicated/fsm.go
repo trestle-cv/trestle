@@ -125,6 +125,14 @@ func (f *FSM) Apply(l *raft.Log) interface{} {
 			// replica-health failure.
 			return errors.New("operation id reused with different payload")
 		}
+		// The committed entry WAS applied (as a durable dedup): advance the
+		// applied position (and the durable applied index) so follower
+		// wait-for-local-apply and restart recovery track the raft position.
+		f.index, f.term = l.Index, l.Term
+		if l.Index > f.persistedIndex {
+			_, _ = f.db.Exec(`INSERT INTO `+metaTable+`(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, metaIndex, fmt.Sprint(l.Index))
+			_, _ = f.db.Exec(`INSERT INTO `+metaTable+`(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, metaTerm, fmt.Sprint(l.Term))
+		}
 		return &replication.ApplyResult{Index: l.Index, Term: l.Term, ObjectID: op.ObjectID, OpID: op.ID, Kind: op.Kind, Revision: op.Revision}
 	}
 	// Durable restart replays the whole log. Entries at or below the persisted
