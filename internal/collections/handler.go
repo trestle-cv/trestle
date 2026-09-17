@@ -1,6 +1,7 @@
 package collections
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/httperr"
 	"github.com/trestle-cv/trestle/internal/store"
@@ -21,10 +23,19 @@ var fieldTypes = map[string]bool{"text": true, "number": true, "boolean": true, 
 var reserved = map[string]bool{"admin": true, "api": true, "system": true, "trestle": true}
 
 type Handler struct {
-	db   store.Executor
-	auth *adminauth.Handler
-	now  func() time.Time
+	db        store.Executor
+	auth      *adminauth.Handler
+	now       func() time.Time
+	authority MutationAuthority
 }
+
+type MutationAuthority interface {
+	PutCollection(context.Context, Collection) (*replication.ApplyResult, error)
+	DeleteCollection(context.Context, string) (*replication.ApplyResult, error)
+}
+
+func (h *Handler) SetMutationAuthority(a MutationAuthority) { h.authority = a }
+
 type Collection struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
@@ -120,6 +131,17 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	now := h.now().UTC().Format(time.RFC3339Nano)
 	id := newID("col_")
 	resolveFieldIDs(in.Fields, nil)
+	if h.authority != nil {
+		def := Collection{ID: id, Name: in.Name, Kind: "base", Fields: in.Fields, CreatedAt: now, UpdatedAt: now}
+		if _, err := h.authority.PutCollection(r.Context(), def); err == nil {
+			item, _ := h.load(r, in.Name)
+			writeJSON(w, 201, item)
+			return
+		} else if !errors.Is(err, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", err.Error())
+			return
+		}
+	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
@@ -213,6 +235,17 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, name string) {
 		writeJSON(w, 409, map[string]any{"error": map[string]any{"code": "schema_acknowledgement_required", "message": "The schema change requires explicit acknowledgement.", "changes": changes}})
 		return
 	}
+	if h.authority != nil {
+		def := Collection{ID: before.ID, Name: in.Name, Kind: before.Kind, Fields: in.Fields, CreatedAt: before.CreatedAt, UpdatedAt: now}
+		if _, e := h.authority.PutCollection(r.Context(), def); e == nil {
+			item, _ := h.load(r, in.Name)
+			writeJSON(w, 200, item)
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
+	}
 	if _, err = tx.ExecContext(r.Context(), "DELETE FROM _trestle_fields WHERE collection_id=?", id); err != nil {
 		writeError(w, 500, "internal_error", "The request could not be completed.")
 		return
@@ -233,6 +266,15 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, name string) {
 	writeJSON(w, 200, item)
 }
 func (h *Handler) remove(w http.ResponseWriter, r *http.Request, name string) {
+	if h.authority != nil {
+		if _, e := h.authority.DeleteCollection(r.Context(), name); e == nil {
+			w.WriteHeader(204)
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
+	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, 500, "internal_error", "The request could not be completed.")

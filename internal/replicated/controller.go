@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gantry-tools/gantry-core/replication"
+	"github.com/trestle-cv/trestle/internal/collections"
 	"sync/atomic"
 )
 
@@ -48,4 +49,10 @@ func (c *Controller) Propose(ctx context.Context, kind, obj string, rev int64, p
 		return r, e
 	}
 	return c.auth.Route(ctx, local, forward)
+}
+func (c *Controller) PutCollection(ctx context.Context, d collections.Collection) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindCollectionPut, d.ID, 0, d)
+}
+func (c *Controller) DeleteCollection(ctx context.Context, name string) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindCollectionDelete, name, 0, nil)
 }
