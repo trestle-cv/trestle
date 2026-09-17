@@ -394,7 +394,10 @@ func main() {
 	launcherRoutes := http.NewServeMux()
 	launcherRoutes.HandleFunc("/api/launcher/instances", launcherUI.Instances)
 	launcherRoutes.HandleFunc("/api/launcher/config", launcherUI.Config)
-	app := server.NewWithOptions(logger, dashboard, apiRoutes, adminRoutes, server.Options{TrustedProxies: cfg.TrustedProxies, Root: http.HandlerFunc(launcherUI.Root), Manage: admin.ManagePage(dashboard), LauncherAPI: launcherRoutes})
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/api/cluster/v1/", clusterHandler)
+	rootMux.Handle("/", http.HandlerFunc(launcherUI.Root))
+	app := server.NewWithOptions(logger, dashboard, apiRoutes, adminRoutes, server.Options{TrustedProxies: cfg.TrustedProxies, Root: rootMux, Manage: admin.ManagePage(dashboard), LauncherAPI: launcherRoutes})
 	app.SetDatabaseCheck(database.Ping)
 	httpServer := &http.Server{Addr: cfg.Listen, Handler: app.Handler(), ReadHeaderTimeout: cfg.ReadHeaderTimeout, ReadTimeout: cfg.ReadTimeout, IdleTimeout: cfg.IdleTimeout, MaxHeaderBytes: cfg.MaxHeaderBytes}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
