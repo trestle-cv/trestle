@@ -282,10 +282,11 @@ func main() {
 	propagationManager := &coreprop.Manager{Adapter: productprop.New(database.DB()), Store: productprop.NewStateStore(database.DB())}
 	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version, Propagation: propagationManager}
 	adminRoutes.Handle("/admin/v1/cluster/", clusterHandler)
-	apiRoutes.Handle("/api/cluster/v1/", clusterHandler)
+	clusterPeerRoutes := http.NewServeMux()
+	clusterPeerRoutes.Handle("/api/cluster/v1/", clusterHandler)
 	if replicatedRuntime != nil {
 		rr := replicatedRuntime
-		apiRoutes.HandleFunc("/api/cluster/v1/replication/propose", func(w http.ResponseWriter, r *http.Request) {
+		clusterPeerRoutes.HandleFunc("/api/cluster/v1/replication/propose", func(w http.ResponseWriter, r *http.Request) {
 			body, _, e := clusterTransport.Authenticate(r, "replication")
 			if e != nil {
 				http.Error(w, "unauthorized", 401)
@@ -395,7 +396,7 @@ func main() {
 	launcherRoutes.HandleFunc("/api/launcher/instances", launcherUI.Instances)
 	launcherRoutes.HandleFunc("/api/launcher/config", launcherUI.Config)
 	rootMux := http.NewServeMux()
-	rootMux.Handle("/api/cluster/v1/", clusterHandler)
+	rootMux.Handle("/api/cluster/v1/", clusterPeerRoutes)
 	rootMux.Handle("/", http.HandlerFunc(launcherUI.Root))
 	app := server.NewWithOptions(logger, dashboard, apiRoutes, adminRoutes, server.Options{TrustedProxies: cfg.TrustedProxies, Root: rootMux, Manage: admin.ManagePage(dashboard), LauncherAPI: launcherRoutes})
 	app.SetDatabaseCheck(database.Ping)

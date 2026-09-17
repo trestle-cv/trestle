@@ -24,6 +24,8 @@ func TestClusterAPIMountedAtPublicPath(t *testing.T) {
 		switch {
 		case r.URL.Path == "/api/cluster/v1/join":
 			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/api/cluster/v1/replication/propose":
+			w.WriteHeader(http.StatusOK)
 		case strings.HasPrefix(r.URL.Path, "/api/cluster/v1/rpc/"):
 			w.WriteHeader(http.StatusOK)
 		default:
@@ -35,7 +37,7 @@ func TestClusterAPIMountedAtPublicPath(t *testing.T) {
 	rootMux.Handle("/", http.HandlerFunc(http.NotFound))
 	app := server.NewWithOptions(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, appAPI, nil, server.Options{Root: rootMux})
 
-	for _, p := range []string{"/api/cluster/v1/join", "/api/cluster/v1/rpc/status"} {
+	for _, p := range []string{"/api/cluster/v1/join", "/api/cluster/v1/replication/propose", "/api/cluster/v1/rpc/status"} {
 		req := httptest.NewRequest(http.MethodPost, p, nil)
 		rec := httptest.NewRecorder()
 		app.Handler().ServeHTTP(rec, req)
