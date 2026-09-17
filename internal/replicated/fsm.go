@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 
 	"github.com/gantry-tools/gantry-core/replication"
@@ -532,6 +533,7 @@ func listCollections(ctx context.Context, tx store.Transaction) ([]string, error
 func (f *FSM) setFailure(e error) {
 	if f.failure == nil {
 		f.failure = e
+		log.Printf("trestle replication FSM apply failure (replica poisoned): %v", e)
 	}
 }
 
