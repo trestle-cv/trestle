@@ -15,6 +15,7 @@ import (
 	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/hashicorp/raft"
 	"github.com/trestle-cv/trestle/internal/collections"
+	"github.com/trestle-cv/trestle/internal/replerr"
 	"github.com/trestle-cv/trestle/internal/store"
 )
 
@@ -36,11 +37,11 @@ var (
 	// conflict: a collection name committed under two different IDs (a racing
 	// duplicate create). The operation is rejected for its caller; it is not
 	// replica corruption.
-	ErrCollectionConflict = errors.New("collection conflict")
+	ErrCollectionConflict = replerr.ErrCollectionConflict
 	// ErrStalePrecondition reports a deterministic per-operation caller
 	// conflict: a record create/update/delete carrying a stale version. The
 	// operation is rejected for its caller; it is not replica corruption.
-	ErrStalePrecondition = errors.New("stale record precondition")
+	ErrStalePrecondition = replerr.ErrStalePrecondition
 )
 
 // semanticConflict reports whether e is a deterministic per-operation caller
@@ -49,7 +50,7 @@ var (
 // not a client-error signal. A stale update or a duplicate collection name is
 // the caller's mistake and must leave the replica able to serve future commits.
 func semanticConflict(e error) bool {
-	return errors.Is(e, ErrCollectionConflict) || errors.Is(e, ErrStalePrecondition)
+	return replerr.IsSemanticConflict(e)
 }
 
 type RecordPayload struct {

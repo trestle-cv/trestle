@@ -15,6 +15,7 @@ import (
 	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/httperr"
+	"github.com/trestle-cv/trestle/internal/replerr"
 	"github.com/trestle-cv/trestle/internal/store"
 )
 
@@ -142,6 +143,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 201, item)
 			return
 		} else if !errors.Is(err, replication.ErrStandalone) {
+			if replerr.IsSemanticConflict(err) {
+				writeError(w, 409, "precondition_conflict", err.Error())
+				return
+			}
 			writeError(w, 503, "replication_unavailable", err.Error())
 			return
 		}

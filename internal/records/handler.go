@@ -24,6 +24,7 @@ import (
 	"github.com/trestle-cv/trestle/internal/httperr"
 	"github.com/trestle-cv/trestle/internal/identities"
 	querylang "github.com/trestle-cv/trestle/internal/query"
+	"github.com/trestle-cv/trestle/internal/replerr"
 	"github.com/trestle-cv/trestle/internal/rules"
 	"github.com/trestle-cv/trestle/internal/store"
 )
@@ -41,13 +42,13 @@ type Handler struct {
 }
 
 type ReplicatedRecord struct {
-	CollectionID string         `json:"collection_id"`
-	RecordID     string         `json:"record_id"`
-	Version      int64          `json:"version"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
-	Values       map[string]any `json:"values"`
-	IdempotencyKey string        `json:"idempotency_key,omitempty"`
+	CollectionID   string         `json:"collection_id"`
+	RecordID       string         `json:"record_id"`
+	Version        int64          `json:"version"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
+	Values         map[string]any `json:"values"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 type MutationAuthority interface {
 	PutRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
@@ -255,12 +256,25 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 		writeError(w, 400, "invalid_idempotency_key", "The idempotency key is too long.")
 		return
 	}
+	var in createInput
+	if !decode(w, r, &in) {
+		return
+	}
 	if key != "" {
 		var existing string
 		err := h.db.QueryRowContext(r.Context(), "SELECT record_id FROM _trestle_record_idempotency WHERE collection_id=? AND idempotency_key=?", s.id, key).Scan(&existing)
 		if err == nil {
 			record, fetchErr := h.fetch(r, s, existing)
 			if fetchErr == nil {
+				values, details := validateValues(s, in.Values)
+				if len(details) > 0 {
+					writeValidation(w, details)
+					return
+				}
+				if !sameValues(record.Values, values) {
+					writeError(w, 409, "idempotency_conflict", "The idempotency key is already in use with different content.")
+					return
+				}
 				w.Header().Set("Idempotency-Replayed", "true")
 				w.Header().Set("ETag", fmt.Sprintf(`"%d"`, record.Version))
 				writeJSON(w, 200, projectRecord(record, projection(r)))
@@ -270,10 +284,6 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 			writeError(w, 500, "internal_error", "The request could not be completed.")
 			return
 		}
-	}
-	var in createInput
-	if !decode(w, r, &in) {
-		return
 	}
 	if h.authority != nil {
 		values, details := validateValues(s, in.Values)
@@ -305,6 +315,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 			writeJSON(w, 201, projectRecord(rec, projection(r)))
 			return
 		} else if !errors.Is(e, replication.ErrStandalone) {
+			if replerr.IsSemanticConflict(e) {
+				writeError(w, 409, "precondition_conflict", e.Error())
+				return
+			}
 			writeError(w, 503, "replication_unavailable", e.Error())
 			return
 		}
@@ -639,6 +653,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, s schema, id st
 			writeJSON(w, 200, rec)
 			return
 		} else if !errors.Is(e, replication.ErrStandalone) {
+			if replerr.IsSemanticConflict(e) {
+				writeError(w, 409, "precondition_conflict", e.Error())
+				return
+			}
 			writeError(w, 503, "replication_unavailable", e.Error())
 			return
 		}
@@ -703,6 +721,10 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, s schema, id st
 			w.WriteHeader(204)
 			return
 		} else if !errors.Is(e, replication.ErrStandalone) {
+			if replerr.IsSemanticConflict(e) {
+				writeError(w, 409, "precondition_conflict", e.Error())
+				return
+			}
 			writeError(w, 503, "replication_unavailable", e.Error())
 			return
 		}
@@ -865,4 +887,23 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+// sameValues reports whether the incoming create values match the stored record
+// for every submitted field. A caller idempotency retry with identical semantic
+// intent replays the original result; a retry that changes any submitted value
+// is a caller conflict and must be rejected rather than silently ignored.
+func sameValues(stored map[string]any, incoming map[string]any) bool {
+	for k, iv := range incoming {
+		rv, ok := stored[k]
+		if !ok {
+			return false
+		}
+		ab, e1 := json.Marshal(iv)
+		bb, e2 := json.Marshal(rv)
+		if e1 != nil || e2 != nil || string(ab) != string(bb) {
+			return false
+		}
+	}
+	return true
 }

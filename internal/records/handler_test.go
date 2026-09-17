@@ -161,11 +161,17 @@ func TestIdempotentCreateProjectionAndBounds(t *testing.T) {
 			}
 			var first Record
 			json.Unmarshal(w.Body.Bytes(), &first)
-			w = invoke(t, h, s, "POST", "/api/v1/collections/issues/records?fields=title", map[string]any{"values": map[string]any{"title": "ignored"}}, headers)
+			w = invoke(t, h, s, "POST", "/api/v1/collections/issues/records?fields=title", map[string]any{"values": map[string]any{"title": "same", "score": 4}}, headers)
 			var replay Record
 			json.Unmarshal(w.Body.Bytes(), &replay)
 			if w.Code != 200 || w.Header().Get("Idempotency-Replayed") != "true" || replay.ID != first.ID {
-				t.Fatalf("replay %d %s", w.Code, w.Body.String())
+				t.Fatalf("same-intent replay %d %s", w.Code, w.Body.String())
+			}
+			// A retry that changes the semantic intent must be rejected, not
+			// silently ignored.
+			w = invoke(t, h, s, "POST", "/api/v1/collections/issues/records?fields=title", map[string]any{"values": map[string]any{"title": "ignored"}}, headers)
+			if w.Code != 409 {
+				t.Fatalf("different-intent retry must reject, got %d %s", w.Code, w.Body.String())
 			}
 			w = invoke(t, h, s, "GET", "/api/v1/collections/issues/records?limit=101", nil, nil)
 			if w.Code != 400 {
