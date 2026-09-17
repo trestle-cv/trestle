@@ -147,6 +147,7 @@ func (f *FSM) Apply(l *raft.Log) interface{} {
 
 	ctx := context.Background()
 	if e := f.materialize(ctx, op, digest, l.Index, l.Term); e != nil {
+		log.Printf("trestle replication FSM apply failure at index %d op %s kind %s obj %s: %v", l.Index, op.ID, op.Kind, op.ObjectID, e)
 		f.setFailure(e)
 		return e
 	}
