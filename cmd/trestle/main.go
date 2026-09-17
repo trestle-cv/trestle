@@ -62,6 +62,13 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "cluster" {
 		os.Exit(runCluster(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "replicate" {
+		if err := runReplicate(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "trestle:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "reset" {
 		os.Exit(runReset(os.Args[2:]))
 	}
