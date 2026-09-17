@@ -334,6 +334,21 @@ func main() {
 			}
 			w.WriteHeader(204)
 		})
+		adminRoutes.HandleFunc("/admin/v1/replication/snapshot", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method", 405)
+				return
+			}
+			if _, ok := admin.Authorize(r, true); !ok {
+				http.Error(w, "forbidden", 403)
+				return
+			}
+			if e := rr.Node.Snapshot(); e != nil {
+				http.Error(w, e.Error(), 500)
+				return
+			}
+			w.WriteHeader(204)
+		})
 	}
 	databaseSetup := databasesetup.New(admin, databasesetup.Options{DataDir: cfg.DataDir, Current: database.Provider(), Explicit: cfg.DatabaseExplicit || cfg.DatabaseConfigured, MaxOpen: cfg.DatabaseMaxOpen, MaxIdle: cfg.DatabaseMaxIdle, ConnectTimeout: cfg.DatabaseConnectTimeout, ConnMaxLifetime: cfg.DatabaseConnMaxLifetime})
 	adminRoutes.Handle("/admin/v1/database/setup", databaseSetup)
