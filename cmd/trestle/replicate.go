@@ -111,8 +111,7 @@ func replicateLogin(client *http.Client, base, user, pass string) (*replicateAut
 		b, _ := io.ReadAll(resp.Body)
 		return resp, b, nil
 	}
-	_, _, _ = do(http.MethodPost, "/admin/v1/setup", map[string]string{"username": user, "email": user + "@example.com", "password": pass, "applicationRegistrationPolicy": "closed"}, nil, "")
-	login, body, err := do(http.MethodPost, "/admin/v1/login", map[string]string{"email": user + "@example.com", "password": pass}, nil, "")
+	login, body, err := do(http.MethodPost, "/admin/v1/session", map[string]string{"username": user, "password": pass}, nil, "")
 	if err != nil {
 		return nil, err
 	}
