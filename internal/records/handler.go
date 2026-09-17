@@ -290,7 +290,11 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 		}
 		now := h.now().UTC().Format(time.RFC3339Nano)
 		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values}
-		if _, e := h.authority.PutRecord(r.Context(), rr); e == nil {
+		ctx := r.Context()
+		if key != "" {
+			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)
+		}
+		if _, e := h.authority.PutRecord(ctx, rr); e == nil {
 			rec, e := h.fetch(r, s, id)
 			if e != nil {
 				writeError(w, 500, "internal_error", e.Error())
@@ -619,8 +623,12 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, s schema, id st
 	}
 	now := h.now().UTC().Format(time.RFC3339Nano)
 	if h.authority != nil {
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: version + 1, CreatedAt: current.CreatedAt, UpdatedAt: now, Values: values}
-		if _, e := h.authority.PutRecord(r.Context(), rr); e == nil {
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version + 1), CreatedAt: current.CreatedAt, UpdatedAt: now, Values: values}
+		ctx := r.Context()
+		if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
+			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)
+		}
+		if _, e := h.authority.PutRecord(ctx, rr); e == nil {
 			rec, e := h.fetch(r, s, id)
 			if e != nil {
 				writeError(w, 500, "internal_error", e.Error())
@@ -685,8 +693,12 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, s schema, id st
 		return
 	}
 	if h.authority != nil {
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: version}
-		if _, e := h.authority.DeleteRecord(r.Context(), rr); e == nil {
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version)}
+		ctx := r.Context()
+		if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
+			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)
+		}
+		if _, e := h.authority.DeleteRecord(ctx, rr); e == nil {
 			w.WriteHeader(204)
 			return
 		} else if !errors.Is(e, replication.ErrStandalone) {

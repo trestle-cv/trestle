@@ -123,3 +123,15 @@ func destructiveChanges(oldFields, newFields []Field) []string {
 	}
 	return changes
 }
+
+// CreatePhysicalTx is the exported tx-aware physical-table creator used by the
+// replicated FSM (deterministic consensus materialization).
+func CreatePhysicalTx(ctx context.Context, tx store.Transaction, dialect store.Dialect, collectionID string, fields []Field) error {
+	return createPhysical(ctx, tx, dialect, collectionID, fields)
+}
+
+// RebuildPhysicalTx is the exported tx-aware physical-table rebuild used by the
+// replicated FSM (deterministic consensus materialization).
+func RebuildPhysicalTx(ctx context.Context, tx store.Transaction, dialect store.Dialect, collectionID string, oldFields, newFields []Field) error {
+	return rebuildPhysical(ctx, tx, dialect, collectionID, oldFields, newFields)
+}

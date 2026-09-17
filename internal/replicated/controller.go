@@ -31,7 +31,11 @@ func (c *Controller) Propose(ctx context.Context, kind, obj string, rev int64, p
 	}
 	id := replication.RequestID(ctx)
 	if id == "" {
-		id = fmt.Sprintf("trestle-%d", c.seq.Add(1))
+		// Node-scoped operation identity: the per-node counter is prefixed with
+		// this node's raft ID so concurrent proposers on different nodes never
+		// generate colliding operation IDs (a collision would trip the durable
+		// same-ID/different-payload idempotency conflict and poison the replica).
+		id = fmt.Sprintf("trestle-%s-%d", c.node.ID(), c.seq.Add(1))
 	}
 	fr := replication.ForwardRequest{Kind: kind, ObjectID: obj, OpID: id, Revision: rev, Payload: b}
 	local := func(context.Context) (*replication.ApplyResult, error) {

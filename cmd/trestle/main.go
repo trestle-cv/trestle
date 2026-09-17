@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -259,6 +260,9 @@ func main() {
 			logger.Error("replication TLS initialization failed", "error", e)
 			os.Exit(1)
 		}
+		if tlsConfig != nil && tlsConfig.RootCAs != nil {
+			clusterTransport.SetHTTPClient(&http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: tlsConfig.RootCAs, MinVersion: tls.VersionTLS12}}})
+		}
 		replicatedRuntime, e = replruntime.NewReplication(context.Background(), replruntime.ReplicationOptions{DB: database.DB(), DataDir: cfg.DataDir, NodeID: cfg.Replication.NodeID, Address: cfg.Replication.Listen, Bootstrap: cfg.Replication.Bootstrap, TLS: tlsConfig, Insecure: cfg.Replication.InsecurePlaintext, Transport: clusterTransport, Timing: corerepl.ProductionTiming()})
 		if e != nil {
 			logger.Error("replication initialization failed", "error", e)
@@ -283,6 +287,11 @@ func main() {
 			var fr corerepl.ForwardRequest
 			if json.Unmarshal(body, &fr) != nil {
 				http.Error(w, "bad request", 400)
+				return
+			}
+			mode, ready := rr.Controller.State()
+			if mode != corerepl.ModeReplicated || ready != corerepl.ReadinessReadyLeader {
+				http.Error(w, "leader not ready", 503)
 				return
 			}
 			ctx := corerepl.WithRequestID(r.Context(), fr.OpID)

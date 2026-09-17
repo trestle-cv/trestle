@@ -328,6 +328,36 @@ func (c Config) Validate() error {
 	} else if err := validatePostgresURL(c.DatabaseURL); err != nil {
 		return err
 	}
+	return validateReplication(c.Replication)
+}
+
+// validateReplication fails closed on incomplete or contradictory replication
+// configuration. Replication disabled requires nothing; enabled requires a
+// stable listen endpoint and either a complete TLS triplet or an explicit
+// insecure-local opt-in (never both).
+func validateReplication(r ReplicationConfig) error {
+	if !r.Enabled {
+		return nil
+	}
+	if r.Listen == "" {
+		return errors.New("replication enabled requires a stable listen/advertise endpoint (TRESTLE_REPLICATION_LISTEN)")
+	}
+	if _, _, err := net.SplitHostPort(r.Listen); err != nil {
+		return fmt.Errorf("invalid replication listen endpoint %q: %w", r.Listen, err)
+	}
+	tlsProvided := r.TLSCert != "" || r.TLSKey != "" || r.TLSCA != ""
+	if r.InsecurePlaintext {
+		if tlsProvided {
+			return errors.New("replication TLS and insecure plaintext are contradictory; configure one")
+		}
+		return nil
+	}
+	if !tlsProvided {
+		return errors.New("replication enabled requires the TLS cert/key/CA triplet or an explicit insecure plaintext opt-in")
+	}
+	if r.TLSCert == "" || r.TLSKey == "" || r.TLSCA == "" {
+		return errors.New("replication TLS requires the complete cert/key/CA triplet")
+	}
 	return nil
 }
 

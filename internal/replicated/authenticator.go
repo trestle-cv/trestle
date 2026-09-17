@@ -3,7 +3,6 @@ package replicated
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +16,7 @@ import (
 const replicationCapability = "replication"
 
 type Authenticator struct {
-	db        *sql.DB
+	db        store.Executor
 	protocol  int
 	localID   raft.ServerID
 	localCaps string
