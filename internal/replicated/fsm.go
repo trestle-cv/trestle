@@ -31,6 +31,27 @@ const (
 	snapFormat = 1
 )
 
+var (
+	// ErrCollectionConflict reports a deterministic per-operation caller
+	// conflict: a collection name committed under two different IDs (a racing
+	// duplicate create). The operation is rejected for its caller; it is not
+	// replica corruption.
+	ErrCollectionConflict = errors.New("collection conflict")
+	// ErrStalePrecondition reports a deterministic per-operation caller
+	// conflict: a record create/update/delete carrying a stale version. The
+	// operation is rejected for its caller; it is not replica corruption.
+	ErrStalePrecondition = errors.New("stale record precondition")
+)
+
+// semanticConflict reports whether e is a deterministic per-operation caller
+// conflict. Such an operation is rejected and returned to its caller, but it
+// must NOT fence the replica: committed-apply health is a corruption signal,
+// not a client-error signal. A stale update or a duplicate collection name is
+// the caller's mistake and must leave the replica able to serve future commits.
+func semanticConflict(e error) bool {
+	return errors.Is(e, ErrCollectionConflict) || errors.Is(e, ErrStalePrecondition)
+}
+
 type RecordPayload struct {
 	CollectionID string         `json:"collection_id"`
 	RecordID     string         `json:"record_id"`
@@ -147,6 +168,9 @@ func (f *FSM) Apply(l *raft.Log) interface{} {
 
 	ctx := context.Background()
 	if e := f.materialize(ctx, op, digest, l.Index, l.Term); e != nil {
+		if semanticConflict(e) {
+			return e
+		}
 		log.Printf("trestle replication FSM apply failure at index %d op %s kind %s obj %s: %v", l.Index, op.ID, op.Kind, op.ObjectID, e)
 		f.setFailure(e)
 		return e
@@ -241,7 +265,7 @@ func applyCollection(ctx context.Context, tx store.Transaction, dialect store.Di
 		return err
 	}
 	if beforeID != def.ID {
-		return fmt.Errorf("replicated collection id mismatch")
+		return fmt.Errorf("%w: collection %q already exists under id %s", ErrCollectionConflict, def.Name, beforeID)
 	}
 	beforeFields, err = loadFields(ctx, tx, def.ID)
 	if err != nil {
@@ -371,7 +395,7 @@ func putRecord(ctx context.Context, tx store.Transaction, dialect store.Dialect,
 		return err
 	}
 	if p.Version != current+1 {
-		return fmt.Errorf("record %q stale update: expected version %d, current %d", p.RecordID, p.Version-1, current)
+		return fmt.Errorf("%w: record %q stale update: expected version %d, current %d", ErrStalePrecondition, p.RecordID, p.Version-1, current)
 	}
 	sets, args := []string{"_version=?", "_updated=?"}, []any{p.Version, p.UpdatedAt}
 	for _, f := range fieldMeta {
@@ -385,7 +409,7 @@ func putRecord(ctx context.Context, tx store.Transaction, dialect store.Dialect,
 		return e
 	}
 	if n, _ := r.RowsAffected(); n != 1 {
-		return fmt.Errorf("record %q stale update: concurrent modification", p.RecordID)
+		return fmt.Errorf("%w: record %q stale update: concurrent modification", ErrStalePrecondition, p.RecordID)
 	}
 	return nil
 }
@@ -403,7 +427,7 @@ func deleteRecord(ctx context.Context, tx store.Transaction, p RecordPayload) er
 		return err
 	}
 	if current != p.Version {
-		return fmt.Errorf("record %q stale delete: expected version %d, current %d", p.RecordID, p.Version, current)
+		return fmt.Errorf("%w: record %q stale delete: expected version %d, current %d", ErrStalePrecondition, p.RecordID, p.Version, current)
 	}
 	if _, e := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE _id=? AND _version=?`, p.RecordID, p.Version); e != nil {
 		return e

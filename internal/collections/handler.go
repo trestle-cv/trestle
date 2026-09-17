@@ -132,6 +132,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	id := newID("col_")
 	resolveFieldIDs(in.Fields, nil)
 	if h.authority != nil {
+		if _, err := h.load(r, in.Name); err == nil {
+			writeError(w, 409, "collection_exists", "A collection with that name already exists.")
+			return
+		}
 		def := Collection{ID: id, Name: in.Name, Kind: "base", Fields: in.Fields, CreatedAt: now, UpdatedAt: now}
 		if _, err := h.authority.PutCollection(r.Context(), def); err == nil {
 			item, _ := h.load(r, in.Name)

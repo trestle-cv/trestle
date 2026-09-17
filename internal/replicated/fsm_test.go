@@ -92,8 +92,13 @@ func TestFSMRecordVersionPreconditions(t *testing.T) {
 	if errOf(applyLog(t, f, 4, 1, putOp("op-stale", "r1", 2, testRecord("r1", 2, "C", 3)))) == nil {
 		t.Fatal("stale record update must fail closed")
 	}
-	if f.ApplyFailure() == nil {
-		t.Fatal("stale update must mark the replica unhealthy")
+	// A stale update is a caller conflict, not replica corruption: the op is
+	// rejected but the replica must stay healthy and keep applying commits.
+	if f.ApplyFailure() != nil {
+		t.Fatal("stale update must not poison the replica")
+	}
+	if e := errOf(applyLog(t, f, 5, 1, putOp("op-next", "r1", 3, testRecord("r1", 3, "D", 4)))); e != nil {
+		t.Fatalf("replica must continue applying commits after a rejected stale update: %v", e)
 	}
 	// Create collision.
 	f2 := testFSM(t)
@@ -103,6 +108,43 @@ func TestFSMRecordVersionPreconditions(t *testing.T) {
 	}
 	if errOf(applyLog(t, f2, 3, 1, putOp("op-dup", "r1", 1, testRecord("r1", 1, "A", 1)))) == nil {
 		t.Fatal("duplicate create must fail closed")
+	}
+	if f2.ApplyFailure() != nil {
+		t.Fatal("duplicate create must not poison the replica")
+	}
+}
+
+// TestFSMCollectionConflictDoesNotFence proves a duplicate collection name
+// committed under a different id is rejected for the operation without
+// poisoning the replica (a racing duplicate create is a caller conflict, not
+// replica corruption).
+func TestFSMCollectionConflictDoesNotFence(t *testing.T) {
+	f := testFSM(t)
+	applyCollectionAt(t, f, "people")
+	coll := testCollection("people")
+	coll.ID = "col_different"
+	coll.CreatedAt = "2026-01-01T00:00:00Z"
+	coll.UpdatedAt = "2026-01-01T00:00:00Z"
+	conflict, _ := collectionOp("op-c2", coll)
+	if e := errOf(applyLog(t, f, 2, 1, conflict)); e == nil {
+		t.Fatal("duplicate collection name with a different id must fail closed")
+	}
+	if f.ApplyFailure() != nil {
+		t.Fatal("collection conflict must not poison the replica")
+	}
+	// The replica must keep applying subsequent commits.
+	orders := testCollection("orders")
+	orders.ID = "col_orders"
+	orders.Fields = []collections.Field{
+		{ID: "fld_o_name", Name: "name", Type: "text"},
+		{ID: "fld_o_total", Name: "total", Type: "number"},
+	}
+	ordersOp, _ := collectionOp("col-op-orders", orders)
+	if e := errOf(applyLog(t, f, 3, 1, ordersOp)); e != nil {
+		t.Fatalf("replica must keep applying commits after a rejected collection conflict: %v", e)
+	}
+	if f.ApplyFailure() != nil {
+		t.Fatal("replica must stay healthy after a rejected collection conflict")
 	}
 }
 
