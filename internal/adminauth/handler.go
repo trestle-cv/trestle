@@ -163,6 +163,13 @@ func (h *Handler) setupStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetupRequired(ctx context.Context) (bool, error) {
+	// Reload the account model so an administrator created out-of-band (for
+	// example by the `trestle setup` CLI) is recognised by the running service
+	// without requiring a restart. This mirrors Watchpost/Webfleet, whose
+	// setup-status and login handlers reload before reading.
+	if err := h.accounts.Reload(); err != nil {
+		return false, err
+	}
 	return h.accounts.Empty(), nil
 }
 
@@ -316,6 +323,12 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	identifier := strings.TrimSpace(input.Username)
 	if identifier == "" {
 		identifier = strings.TrimSpace(input.Email)
+	}
+	// Reload so a CLI-created administrator can sign in without a restart,
+	// matching the sibling projects' login behaviour.
+	if err := h.accounts.Reload(); err != nil {
+		writeError(w, 500, "internal_error", "The request could not be completed.")
+		return
 	}
 	account, _, valid := h.accounts.AuthenticatePassword(identifier, input.Password)
 	if !valid {

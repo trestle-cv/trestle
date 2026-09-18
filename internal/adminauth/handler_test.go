@@ -281,3 +281,25 @@ func TestPasswordEncoding(t *testing.T) {
 		t.Fatal("short password accepted")
 	}
 }
+
+func TestOutOfBandAdministratorRecognisedWithoutRestart(t *testing.T) {
+	for _, provider := range storetest.Providers(t) {
+		t.Run(provider, func(t *testing.T) {
+			h := testHandler(t, provider)
+			if required, _ := h.SetupRequired(context.Background()); !required {
+				t.Fatal("expected setup required initially")
+			}
+			// Simulate `trestle setup` creating the administrator out-of-band
+			// while the service is already running.
+			if err := h.SetupAdministrator(context.Background(), "admin", "admin@example.com", "correct horse battery staple", "closed"); err != nil {
+				t.Fatal(err)
+			}
+			if required, _ := h.SetupRequired(context.Background()); required {
+				t.Fatal("out-of-band administrator not recognised without restart")
+			}
+			if got := request(t, h, http.MethodPost, "/admin/v1/session", credentials{Username: "admin", Password: "correct horse battery staple"}, nil, ""); got.Code != http.StatusOK {
+				t.Fatalf("login by out-of-band admin=%d %s", got.Code, got.Body.String())
+			}
+		})
+	}
+}
