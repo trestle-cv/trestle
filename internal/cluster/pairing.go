@@ -224,9 +224,8 @@ func (s *Service) AcceptRemote(ctx context.Context, remote core.Identity, outbou
 
 func (s *Service) BeginOutbound(ctx context.Context, remoteURL, invitationToken string, client *http.Client) (OutboundJoin, error) {
 	remoteURL = strings.TrimRight(strings.TrimSpace(remoteURL), "/")
-	u, err := url.Parse(remoteURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return OutboundJoin{}, errors.New("remote Trestle URL must use https")
+	if err := validateEndpointScheme(remoteURL, s.insecurePlaintext); err != nil {
+		return OutboundJoin{}, err
 	}
 	local, err := s.EnsureIdentity(ctx, "")
 	if err != nil {

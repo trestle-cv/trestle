@@ -387,7 +387,26 @@ inside an explicitly configured trusted-proxy CIDR. Bind Trestle to loopback
 behind Caddy or nginx, preserve the public `Host`, and configure only the exact
 proxy addresses you administer.
 
+## Clustering and replication transport
+
+Remote cluster traffic is HTTPS by default. Plaintext transport is an explicit
+trusted-private-network mode: set `TRESTLE_REPLICATION_INSECURE_PLAINTEXT=1`
+to permit HTTP cluster endpoints (join, peer RPC, advertised public endpoint)
+and the replication channel. Plaintext disables TLS **confidentiality** only;
+the cluster request envelopes still authenticate every request (HMAC), enforce
+capabilities and reject replay. Only use it on a network you trust.
+
+```sh
+# Example: three-node cluster on a trusted private network
+export TRESTLE_REPLICATION_LISTEN=192.168.1.11:7343
+export TRESTLE_REPLICATION_INSECURE_PLAINTEXT=1
+trestle cluster init --endpoint http://192.168.1.11:7333
+# on each peer
+trestle cluster join --url http://192.168.1.12:7333 --token-file ./token
+```
+
 ## Verify a change
+
 
 ```sh
 nift build

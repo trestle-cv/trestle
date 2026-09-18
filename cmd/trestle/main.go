@@ -251,7 +251,9 @@ func main() {
 	apiRoutes.Handle("/api/v1/capabilities", apiDocs)
 	adminRoutes := http.NewServeMux()
 	clusterService := clusterapi.New(database.DB())
+	clusterService.SetInsecurePlaintext(cfg.Replication.InsecurePlaintext)
 	clusterTransport := clusterapi.NewTransport(database.DB(), clusterService, nil)
+	clusterTransport.SetInsecurePlaintext(cfg.Replication.InsecurePlaintext)
 	var replicatedRuntime *replruntime.Replicated
 	if cfg.Replication.Enabled {
 		if database.Provider() != store.SQLite {
