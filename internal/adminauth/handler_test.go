@@ -159,6 +159,12 @@ func TestSetupAdministratorGetsSharedCapabilitiesAndManageRequiresCSRF(t *testin
 	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Username: "user", Email: "user@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusNoContent {
 		t.Fatalf("create=%d %s", got.Code, got.Body.String())
 	}
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Email: "nousername@example.com", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("create without username=%d, want 422", got.Code)
+	}
+	if got := request(t, h, http.MethodPost, "/admin/v1/manage/users", userMutation{Action: "create", Username: "noemail", Password: "another secure password", Roles: []string{"administrator"}}, cookie, session.CSRFToken); got.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("create without email=%d, want 422", got.Code)
+	}
 	if got := request(t, h, http.MethodGet, "/admin/v1/manage/users", nil, cookie, ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), "user@example.com") {
 		t.Fatalf("list=%d %s", got.Code, got.Body.String())
 	}
