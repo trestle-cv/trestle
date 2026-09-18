@@ -129,6 +129,10 @@ func TestSetupLoginLogoutLifecycle(t *testing.T) {
 			if w.Code != 200 {
 				t.Fatalf("login: %d %s", w.Code, w.Body.String())
 			}
+			w = request(t, h, "POST", "/admin/v1/session", credentials{Email: "admin@example.com", Password: "correct horse battery staple"}, nil, "")
+			if w.Code != 200 {
+				t.Fatalf("login by email: %d %s", w.Code, w.Body.String())
+			}
 		})
 	}
 }

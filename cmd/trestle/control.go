@@ -20,6 +20,29 @@ import (
 
 var resetInstalledDataDir = service.InstalledDataDir
 
+// trestleConfigArgs applies the canonical instance-resolution precedence shared
+// by setup/config/reset: an explicit --data-dir wins, then TRESTLE_DATA_DIR,
+// then the data directory recorded by the installed managed service, then the
+// normal default. It returns the --data-dir flag args config.FromOS should
+// receive. It fails closed rather than silently targeting a different instance
+// when the installed unit exists but cannot be used safely.
+func trestleConfigArgs(explicit string) ([]string, error) {
+	dir := strings.TrimSpace(explicit)
+	if dir == "" && strings.TrimSpace(os.Getenv("TRESTLE_DATA_DIR")) == "" {
+		installedData, installed, installedErr := resetInstalledDataDir()
+		if installedErr != nil {
+			return nil, installedErr
+		}
+		if installed {
+			dir = installedData
+		}
+	}
+	if dir == "" {
+		return nil, nil
+	}
+	return []string{"--data-dir", dir}, nil
+}
+
 func runSetup(args []string) int {
 	fs := flag.NewFlagSet("trestle setup", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -49,7 +72,12 @@ func runSetup(args []string) int {
 		fmt.Fprintln(os.Stderr, "trestle:", err)
 		return 1
 	}
-	cfg, err := config.FromOS(nil)
+	configArgs, err := trestleConfigArgs("")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trestle:", err)
+		return 1
+	}
+	cfg, err := config.FromOS(configArgs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trestle:", err)
 		return 1
@@ -81,7 +109,12 @@ func runConfig(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: trestle config show [--json]")
 		return 2
 	}
-	cfg, err := config.FromOS(nil)
+	configArgs, err := trestleConfigArgs("")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trestle:", err)
+		return 1
+	}
+	cfg, err := config.FromOS(configArgs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trestle:", err)
 		return 1
@@ -106,20 +139,10 @@ func runReset(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: trestle reset (--auth|--all) [--data-dir DIR] [--confirm 'TRESTLE AUTH|TRESTLE ALL']")
 		return 2
 	}
-	resolvedDataDir := strings.TrimSpace(*dataDir)
-	if resolvedDataDir == "" && strings.TrimSpace(os.Getenv("TRESTLE_DATA_DIR")) == "" {
-		installedDataDir, installed, installedErr := resetInstalledDataDir()
-		if installedErr != nil {
-			fmt.Fprintln(os.Stderr, "trestle:", installedErr)
-			return 1
-		}
-		if installed {
-			resolvedDataDir = installedDataDir
-		}
-	}
-	configArgs := []string(nil)
-	if resolvedDataDir != "" {
-		configArgs = []string{"--data-dir", resolvedDataDir}
+	configArgs, err := trestleConfigArgs(*dataDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "trestle:", err)
+		return 1
 	}
 	cfg, err := config.FromOS(configArgs)
 	if err != nil {
