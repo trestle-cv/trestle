@@ -140,7 +140,7 @@ func (s *Service) Invite(ctx context.Context) (core.Invitation, string, error) {
 }
 
 func (s *Service) Pair(ctx context.Context, token string, remote core.Identity) (PairingBundle, error) {
-	if err := remote.Validate(); err != nil {
+	if err := remote.ValidateEndpoint(s.insecurePlaintext); err != nil {
 		return PairingBundle{}, err
 	}
 	now := s.now().UTC()

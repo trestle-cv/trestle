@@ -34,7 +34,7 @@ type OutboundJoin struct {
 
 func (s *Service) SubmitJoin(ctx context.Context, in JoinSubmission) (JoinReceipt, error) {
 	now := s.now().UTC()
-	if err := core.ValidateJoinSubmission(in, now); err != nil {
+	if err := core.ValidateJoinSubmissionWithPolicy(in, now, s.insecurePlaintext); err != nil {
 		return JoinReceipt{}, err
 	}
 	local, err := s.EnsureIdentity(ctx, "")
@@ -206,7 +206,7 @@ func (s *Service) PollJoin(ctx context.Context, id, secret string) (PairingResul
 }
 
 func (s *Service) AcceptRemote(ctx context.Context, remote core.Identity, outboundCredential, inboundCredential string) error {
-	if err := remote.Validate(); err != nil {
+	if err := remote.ValidateEndpoint(s.insecurePlaintext); err != nil {
 		return err
 	}
 	if outboundCredential == "" || inboundCredential == "" {
