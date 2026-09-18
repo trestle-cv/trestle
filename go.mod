@@ -3,7 +3,7 @@ module github.com/trestle-cv/trestle
 go 1.25.0
 
 require (
-	github.com/gantry-tools/gantry-core v0.4.2
+	github.com/gantry-tools/gantry-core v0.4.3-0.20260918094353-6b6b1f417935
 	github.com/hashicorp/raft v1.7.3
 	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.25.0
