@@ -77,6 +77,7 @@ jobs:
         run: |
           node --check internal/web/public/assets/js/script.js
           node scripts/check-web.mjs internal/web/public
+          node scripts/test-database-setup.mjs
           node scripts/test-login-form-contract.mjs
       - name: Cross-build application
         shell: bash

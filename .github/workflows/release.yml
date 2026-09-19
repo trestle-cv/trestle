@@ -29,6 +29,8 @@ jobs:
           go vet ./...
           node --check internal/web/public/assets/js/script.js
           node scripts/check-web.mjs internal/web/public
+          node scripts/test-database-setup.mjs
+          node scripts/test-login-form-contract.mjs
       - name: Package six targets
         run: ./scripts/package-release.sh "${GITHUB_REF_NAME#v}" dist
       - name: Write release notes
