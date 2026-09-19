@@ -30,7 +30,7 @@ globalThis.TrestleDatabaseSetup = (() => {
       applyEnabled: pendingPostgres && urlNonEmpty,
       adminFormVisible: !pendingPostgres,
       registrationPolicyVisible: firstRun && !pendingPostgres,
-      adminEmailRequired: !pendingPostgres,
+      adminEmailRequired: firstRun && !pendingPostgres,
       adminPasswordRequired: !pendingPostgres
     };
   }
