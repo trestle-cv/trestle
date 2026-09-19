@@ -23,15 +23,28 @@ globalThis.TrestleDatabaseSetup = (() => {
     const firstRun = state.mode === "first-run";
     const pendingPostgres = firstRun && state.selectable && state.provider === "postgres";
     const urlNonEmpty = Boolean(state.url && state.url.trim());
+    // On a first-run SQLite deployment the admin form is staged behind the
+    // database choice: the operator confirms the database with Continue before
+    // account fields appear. PostgreSQL is staged behind the connection test
+    // (and restart), so the admin form is only shown once the backend is set.
+    // When the database is no longer selectable (already configured), the
+    // choice is settled and the admin form can appear.
+    const databaseAccepted = firstRun && (state.databaseChosen || !state.selectable);
+    const showAdmin = !pendingPostgres && (!firstRun || databaseAccepted);
+    // In first-run mode the two stages are mutually exclusive: the database
+    // choice is shown until it is accepted (Continue for SQLite, connection
+    // test for PostgreSQL), then the administrator form takes its place.
+    const showDatabase = firstRun && !databaseAccepted;
     return {
-      previewVisible: firstRun,
+      previewVisible: showDatabase,
       postgresConfigVisible: pendingPostgres,
       applyVisible: pendingPostgres,
       applyEnabled: pendingPostgres && urlNonEmpty,
-      adminFormVisible: !pendingPostgres,
-      registrationPolicyVisible: firstRun && !pendingPostgres,
-      adminEmailRequired: firstRun && !pendingPostgres,
-      adminPasswordRequired: !pendingPostgres
+      adminFormVisible: showAdmin,
+      databaseContinueVisible: firstRun && !pendingPostgres && !databaseAccepted,
+      registrationPolicyVisible: firstRun && !pendingPostgres && databaseAccepted,
+      adminEmailRequired: firstRun && !pendingPostgres && databaseAccepted,
+      adminPasswordRequired: !pendingPostgres && (!firstRun || databaseAccepted)
     };
   }
   function authGateCopy(setupRequired) {
@@ -174,16 +187,25 @@ const databasePreview=document.querySelector("#database-preview");
 const postgresConfiguration=document.querySelector("#postgres-configuration");
 const databaseResult=document.querySelector("#database-result");
 const databaseApply=document.querySelector("#database-apply");
+const databaseContinue=document.querySelector("#database-continue");
 const databaseUrlInput=databasePreview.querySelector('[name="database-url"]');
 function selectedDatabase(){return databasePreview.querySelector('[name="database-provider"]:checked').value}
 const administratorFields=document.querySelector("#administrator-fields");
 let databaseSelectable=false;
-function databaseSetupState(){return TrestleDatabaseSetup.computeState({mode:authForm.classList.contains("first-run")?"first-run":"sign-in",selectable:databaseSelectable,provider:selectedDatabase(),url:databaseUrlInput.value})}
-function syncDatabaseFields(){const state=databaseSetupState();databasePreview.hidden=!state.previewVisible;postgresConfiguration.hidden=!state.postgresConfigVisible;databaseApply.hidden=!state.applyVisible;databaseApply.disabled=!state.applyEnabled;administratorFields.hidden=!state.adminFormVisible;document.querySelector("#registration-policy-field").hidden=!state.registrationPolicyVisible;authEmail.required=state.adminEmailRequired;authConfirm.required=state.adminEmailRequired;authPassword.required=state.adminPasswordRequired;authForm.querySelector("#auth-submit").textContent=TrestleDatabaseSetup.authGateCopy(setupRequired).submitLabel;if(!state.postgresConfigVisible){databaseResult.textContent="";databaseResult.className=""}}
+// Staged first-run setup: the database choice is accepted before the
+// administrator form is shown. For SQLite this is a deliberate Continue step so
+// "Choose a database" and "Create the administrator account" are separate
+// screens (matching Webfleet). PostgreSQL requires "Test and use PostgreSQL"
+// first and then a restart, so the admin form only appears after the backend
+// is settled.
+let databaseChosen=false;
+function databaseSetupState(){return TrestleDatabaseSetup.computeState({mode:authForm.classList.contains("first-run")?"first-run":"sign-in",selectable:databaseSelectable,provider:selectedDatabase(),url:databaseUrlInput.value,databaseChosen:databaseChosen})}
+function syncDatabaseFields(){const state=databaseSetupState();databasePreview.hidden=!state.previewVisible;postgresConfiguration.hidden=!state.postgresConfigVisible;databaseApply.hidden=!state.applyVisible;databaseApply.disabled=!state.applyEnabled;databaseContinue.hidden=!state.databaseContinueVisible;administratorFields.hidden=!state.adminFormVisible;document.querySelector("#registration-policy-field").hidden=!state.registrationPolicyVisible;authEmail.required=state.adminEmailRequired;authConfirm.required=state.adminEmailRequired;authPassword.required=state.adminPasswordRequired;authForm.querySelector("#auth-submit").textContent=TrestleDatabaseSetup.authGateCopy(setupRequired).submitLabel;if(!state.postgresConfigVisible){databaseResult.textContent="";databaseResult.className=""}}
 function syncDatabaseApply(){databaseApply.disabled=!databaseSetupState().applyEnabled}
 new MutationObserver(syncDatabaseFields).observe(authForm,{attributes:true,attributeFilter:["class"]});
 databaseUrlInput.addEventListener("input",syncDatabaseApply);
 databasePreview.addEventListener("change",syncDatabaseFields);
+databaseContinue.addEventListener("click",()=>{databaseChosen=true;syncDatabaseFields();authUsername.focus()});
 databaseApply.addEventListener("click",async()=>{databaseResult.textContent="Testing PostgreSQL…";databaseResult.className="";databaseApply.disabled=true;try{const result=await jsonRequest("/admin/v1/database/setup",{method:"POST",body:JSON.stringify({provider:"postgres",url:databaseUrlInput.value})});databaseSelectable=false;databasePreview.disabled=true;const notice=TrestleDatabaseSetup.restartNotice(result.version);databaseResult.className="restart-notice";databaseResult.innerHTML=`<strong>${escapeHTML(notice.heading)}</strong><span>${escapeHTML(notice.body)}</span>`;administratorFields.hidden=true;postgresConfiguration.hidden=true}catch(error){databaseResult.textContent=error.message;databaseResult.className=""}finally{syncDatabaseApply()}});
 async function loadDatabaseSetup(){try{const result=await jsonRequest("/admin/v1/database/setup");databaseSelectable=Boolean(result.selectable);const radio=databasePreview.querySelector(`[value="${result.provider}"]`);if(radio)radio.checked=true;databasePreview.disabled=!databaseSelectable;syncDatabaseFields()}catch{}}
 loadDatabaseSetup();syncDatabaseFields();

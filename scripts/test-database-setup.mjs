@@ -37,20 +37,37 @@ const check = (label, actual, expected) => {
   }
 };
 
-const firstRun = {mode: "first-run", selectable: true, provider: "sqlite", url: ""};
-const postgresSelectedEmpty = {mode: "first-run", selectable: true, provider: "postgres", url: ""};
-const postgresSelectedFilled = {mode: "first-run", selectable: true, provider: "postgres", url: "postgres://u@host/db?sslmode=require"};
-const savedAwaitingRestart = {mode: "first-run", selectable: false, provider: "postgres", url: ""};
-const signIn = {mode: "sign-in", selectable: false, provider: "postgres", url: ""};
+const firstRun = {mode: "first-run", selectable: true, provider: "sqlite", url: "", databaseChosen: false};
+const firstRunAccepted = {mode: "first-run", selectable: true, provider: "sqlite", url: "", databaseChosen: true};
+const postgresSelectedEmpty = {mode: "first-run", selectable: true, provider: "postgres", url: "", databaseChosen: false};
+const postgresSelectedFilled = {mode: "first-run", selectable: true, provider: "postgres", url: "postgres://u@host/db?sslmode=require", databaseChosen: false};
+const savedAwaitingRestart = {mode: "first-run", selectable: false, provider: "postgres", url: "", databaseChosen: false};
+const signIn = {mode: "sign-in", selectable: false, provider: "postgres", url: "", databaseChosen: false};
 
-// 1. Fresh first-run, SQLite recommended: preview and administrator form
-// visible, PostgreSQL configuration hidden.
-check("fresh sqlite", machine.computeState(firstRun), {
+// 1. Fresh first-run, SQLite recommended but NOT yet accepted: only the
+// database choice is shown; the administrator form is staged behind a Continue
+// step, so the two are never shown simultaneously.
+check("fresh sqlite, before continue", machine.computeState(firstRun), {
   previewVisible: true,
   postgresConfigVisible: false,
   applyVisible: false,
   applyEnabled: false,
+  adminFormVisible: false,
+  databaseContinueVisible: true,
+  registrationPolicyVisible: false,
+  adminEmailRequired: false,
+  adminPasswordRequired: false
+});
+
+// 1b. After the operator confirms SQLite (Continue), the administrator form
+// appears and the database choice is gone.
+check("fresh sqlite, after continue", machine.computeState(firstRunAccepted), {
+  previewVisible: false,
+  postgresConfigVisible: false,
+  applyVisible: false,
+  applyEnabled: false,
   adminFormVisible: true,
+  databaseContinueVisible: false,
   registrationPolicyVisible: true,
   adminEmailRequired: true,
   adminPasswordRequired: true
@@ -64,6 +81,7 @@ check("postgres selected, empty URL", {
   applyVisible: empty.applyVisible,
   applyEnabled: empty.applyEnabled,
   adminFormVisible: empty.adminFormVisible,
+  databaseContinueVisible: empty.databaseContinueVisible,
   adminEmailRequired: empty.adminEmailRequired,
   adminPasswordRequired: empty.adminPasswordRequired
 }, {
@@ -71,6 +89,7 @@ check("postgres selected, empty URL", {
   applyVisible: true,
   applyEnabled: false,
   adminFormVisible: false,
+  databaseContinueVisible: false,
   adminEmailRequired: false,
   adminPasswordRequired: false
 });
@@ -83,12 +102,14 @@ check("postgres selected, filled URL", {
   postgresConfigVisible: filled.postgresConfigVisible,
   applyVisible: filled.applyVisible,
   applyEnabled: filled.applyEnabled,
-  adminFormVisible: filled.adminFormVisible
+  adminFormVisible: filled.adminFormVisible,
+  databaseContinueVisible: filled.databaseContinueVisible
 }, {
   postgresConfigVisible: true,
   applyVisible: true,
   applyEnabled: true,
-  adminFormVisible: false
+  adminFormVisible: false,
+  databaseContinueVisible: false
 });
 
 // 4. Successful connection test: the provider is no longer selectable, so the
@@ -138,8 +159,9 @@ check("sign-in mode", machine.computeState(signIn), {
   applyVisible: false,
   applyEnabled: false,
   adminFormVisible: true,
+  databaseContinueVisible: false,
   registrationPolicyVisible: false,
-  adminEmailRequired: true,
+  adminEmailRequired: false,
   adminPasswordRequired: true
 });
 
