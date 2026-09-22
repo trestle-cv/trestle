@@ -35,7 +35,7 @@ func TestDashboardAssetsAreContentVersionedAndUnversionedRequestsRevalidate(t *t
 	page := httptest.NewRecorder()
 	h.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
 	body := page.Body.String()
-	if strings.Contains(body, "__TRESTLE_ASSET_VERSION__") || !strings.Contains(body, "/assets/js/script.js?v=") || !strings.Contains(body, "/assets/css/style.css?v=") {
+	if strings.Contains(body, "__TRESTLE_ASSET_VERSION__") || !strings.Contains(body, "assets/js/script.js?v=") || !strings.Contains(body, "assets/css/style.css?v=") {
 		t.Fatalf("dashboard does not contain resolved asset versions: %s", body)
 	}
 	unversioned := httptest.NewRecorder()
