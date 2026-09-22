@@ -60,8 +60,8 @@ for (const contract of [
   [appCSS, "#postgres-configuration[hidden]", "PostgreSQL hidden-state CSS"],
   [appJS, 'selectedDatabase()==="postgres"', "PostgreSQL setup selection"],
   [appJS, "Test and save the PostgreSQL connection", "database selection submit guard"],
-  [appHTML, "/assets/js/script.js?v=__TRESTLE_ASSET_VERSION__", "versioned dashboard script"],
-  [appHTML, "/assets/css/style.css?v=__TRESTLE_ASSET_VERSION__", "versioned dashboard stylesheet"],
+  [appHTML, "assets/js/script.js?v=__TRESTLE_ASSET_VERSION__", "versioned dashboard script"],
+  [appHTML, "assets/css/style.css?v=__TRESTLE_ASSET_VERSION__", "versioned dashboard stylesheet"],
 ]) {
   if (!contract[0].includes(contract[1])) throw new Error(`missing ${contract[2]}`);
 }
