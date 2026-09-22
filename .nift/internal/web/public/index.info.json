@@ -18,5 +18,10 @@
     "templates/head.html",
     "templates/template.html"
   ],
-  "reqs": []
+  "reqs": [
+    "internal/web/public/assets/css/auth-parity.css",
+    "internal/web/public/assets/css/style.css",
+    "internal/web/public/assets/images/favicon.svg",
+    "internal/web/public/assets/js/script.js"
+  ]
 }
