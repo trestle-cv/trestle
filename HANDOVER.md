@@ -215,12 +215,14 @@ change them.
 
 ## Current release state
 
-- Released: **v0.1.5** (stable public preview). The canonical Gantry account
-  model, headless setup, confirmed reset commands, installed-service reset
-  targeting, and staged-setup/login-form contracts are included in this
-  release.
-- Development: **0.1.6** on `main`. An ordinary development build reports
-  0.1.6 with commit `unknown`; release builds override the default via ldflags
+- Released: **v0.1.6** (stable public preview). The replicated
+  mutation-consequence contract for SQLite clustering (replicated events,
+  audit and job obligations; replicated webhook/function definitions;
+  raft-mediated job lifecycle; atomic replicated batch creation; full-surface
+  snapshots), cluster-uniform `webhook.key` admission enforcement, and the
+  Lambda leader-capability contract are included in this release.
+- Development: **0.1.7** on `main`. An ordinary development build reports
+  0.1.7 with commit `unknown`; release builds override the default via ldflags
   and are never confused with the development identity.
 - After publishing a stable release, advance the buildinfo default and its
   exact-version test to the next patch, record the released/development
