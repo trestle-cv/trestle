@@ -9,6 +9,8 @@ Trestle v{{VERSION}} {{RELEASE_KIND_BODY}}
 - Typed collections, application authentication, access rules, files, realtime
   SSE, audit, durable jobs, signed webhooks, AWS Lambda delivery, backups and
   offline restore.
+- SQLite replicated clustering with deterministic record, event, audit and job
+  consensus.
 - Checksum-verified release archives for Linux, macOS and Windows on amd64 and
   arm64, plus `SHA256SUMS`.
 
@@ -34,13 +36,53 @@ Trestle v{{VERSION}} {{RELEASE_KIND_BODY}}
   or configuration. Schema upgrades are one-way: there is no automatic database
   downgrade during executable rollback.
 
+## Clustering correctness
+
+Trestle v{{VERSION}} establishes a replicated mutation-consequence contract for
+SQLite clustering. A replicated record mutation now produces the same durable
+consequences as the equivalent standalone mutation, atomically in the consensus
+transaction:
+
+- **Replicated events, audit and job obligations.** Record create/update/delete
+  replicates its event, audit fact and matched automation job obligations with
+  convergent, deterministic identities. Event/audit cursors are portable across
+  nodes.
+- **Replicated automation definitions.** Webhook and function definitions are
+  consensus state; automation matching is deterministic and identical on every
+  node regardless of which node received the request.
+- **Raft-mediated job lifecycle.** Claim, completion, retry, cancel and stale
+  release are consensus operations; external webhook and Lambda delivery stays
+  asynchronous and at-least-once.
+- **Atomic replicated batch creation.** A batch create commits as one atomic
+  operation.
+- **Full-surface snapshots.** Snapshots and restore cover records, events,
+  audit, jobs and automation definitions.
+
+Operator requirements for clustering:
+
+- Every voter must use a **uniform `webhook.key`**, verified by a non-secret
+  SHA-256 fingerprint at the replication handshake and at voter admission;
+  provisioning is out of band and a mismatched node is refused.
+- A **first-time voter must start from empty consensus-owned state**; an
+  existing member restart retains its own state.
+- **Lambda delivery is not automatically leadership-aware**: a leader without
+  AWS credentials leaves Lambda obligations durable and pending until
+  credentials are configured or leadership is transferred to a capable voter.
+- Existing clustered deployments: mutations committed before this release
+  replicated record state without durable consequences and are **not
+  backfilled**; verify voter webhook keys match. Mixed-version clusters are not
+  supported across this release.
+
 ## Known limitations
 
 - No automatic database downgrade during executable rollback.
 - Multiple Trestle processes sharing one database are not supported.
-- No clustering, GraphQL, plugin marketplace, managed cloud, official container
-  image, outbound verification email or self-service password recovery in this
+- No GraphQL, plugin marketplace, managed cloud, official container image,
+  outbound verification email or self-service password recovery in this
   release.
+- Clustering is SQLite-replicated only; PostgreSQL clustering is not supported.
+- Webhook-key rotation, event/audit/job history retention, and automatic
+  Lambda-capable leader election remain future work.
 - Only the newest release line receives security fixes.
 
 ## Verified installation
