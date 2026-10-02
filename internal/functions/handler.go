@@ -6,14 +6,17 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/httperr"
 	"github.com/trestle-cv/trestle/internal/jobs"
+	"github.com/trestle-cv/trestle/internal/replpayload"
 	"github.com/trestle-cv/trestle/internal/store"
 	"io"
 	"net/http"
@@ -24,13 +27,22 @@ import (
 )
 
 type Options struct{ Region, AccessKey, SecretKey string }
+
+// FunctionAuthority routes function definition mutations through the
+// replicated authority in clustered mode. It is nil in standalone mode.
+type FunctionAuthority interface {
+	PutFunction(context.Context, replpayload.FunctionPayload) (*replication.ApplyResult, error)
+	DeleteFunction(context.Context, string) (*replication.ApplyResult, error)
+}
+
 type Handler struct {
-	db      store.Executor
-	admin   *adminauth.Handler
-	jobs    *jobs.Handler
-	options Options
-	now     func() time.Time
-	client  *http.Client
+	db        store.Executor
+	admin     *adminauth.Handler
+	jobs      *jobs.Handler
+	options   Options
+	now       func() time.Time
+	client    *http.Client
+	authority FunctionAuthority
 }
 type invocation struct {
 	TargetID, Topic, Collection, RecordID, InvocationID string
@@ -42,8 +54,10 @@ var regionPattern = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d$`)
 func New(db any, admin *adminauth.Handler, queue *jobs.Handler, options Options) *Handler {
 	h := &Handler{db: store.Adapt(db), admin: admin, jobs: queue, options: options, now: time.Now, client: &http.Client{Timeout: 15 * time.Second}}
 	queue.Register("aws-lambda", h.execute)
+	queue.RegisterCapabilityCheck("aws-lambda", func() bool { return h.options.AccessKey != "" && h.options.SecretKey != "" })
 	return h
 }
+func (h *Handler) SetMutationAuthority(a FunctionAuthority) { h.authority = a }
 func (h *Handler) Dispatch(ctx context.Context, tx store.Transaction, topic, collection, recordID string, payload any) error {
 	rows, err := tx.QueryContext(ctx, "SELECT id,topics FROM _trestle_functions WHERE enabled=?", h.db.Dialect().Boolean(true))
 	if err != nil {
@@ -129,6 +143,16 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	id := "fn_" + token(12)
 	now := h.now().UTC().Format(time.RFC3339Nano)
+	if h.authority != nil {
+		fp := replpayload.FunctionPayload{ID: id, Name: in.Name, Provider: "aws-lambda", Target: in.Target, Region: in.Region, Topics: strings.Join(in.Topics, ","), CallbackScopes: strings.Join(in.CallbackScopes, ","), Enabled: true, CreatedAt: now, UpdatedAt: now}
+		if _, err := h.authority.PutFunction(r.Context(), fp); err == nil {
+			writeJSON(w, 201, map[string]string{"id": id})
+			return
+		} else if !errors.Is(err, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", err.Error())
+			return
+		}
+	}
 	_, err := h.db.ExecContext(r.Context(), "INSERT INTO _trestle_functions(id,name,provider,target,region,topics,callback_scopes,created_at,updated_at) VALUES(?,?,'aws-lambda',?,?,?,?,?,?)", id, in.Name, in.Target, in.Region, strings.Join(in.Topics, ","), strings.Join(in.CallbackScopes, ","), now, now)
 	if err != nil {
 		http.Error(w, "create failed", 409)
@@ -156,6 +180,27 @@ func (h *Handler) action(w http.ResponseWriter, r *http.Request, id string) {
 	if in.Action != "enable" && in.Action != "disable" {
 		http.Error(w, "invalid action", 400)
 		return
+	}
+	if h.authority != nil {
+		var fp replpayload.FunctionPayload
+		var enabledRaw any
+		err := h.db.QueryRowContext(r.Context(), "SELECT id,name,provider,target,region,topics,callback_scopes,enabled,created_at,updated_at FROM _trestle_functions WHERE id=?", id).Scan(&fp.ID, &fp.Name, &fp.Provider, &fp.Target, &fp.Region, &fp.Topics, &fp.CallbackScopes, &enabledRaw, &fp.CreatedAt, &fp.UpdatedAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, 404, "function_not_found", "The function was not found.")
+			return
+		} else if err != nil {
+			writeError(w, 500, "internal_error", "The request could not be completed.")
+			return
+		}
+		fp.Enabled = in.Action == "enable"
+		fp.UpdatedAt = h.now().UTC().Format(time.RFC3339Nano)
+		if _, err := h.authority.PutFunction(r.Context(), fp); err == nil {
+			w.WriteHeader(204)
+			return
+		} else if !errors.Is(err, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", err.Error())
+			return
+		}
 	}
 	result, err := h.db.ExecContext(r.Context(), "UPDATE _trestle_functions SET enabled=?,updated_at=? WHERE id=?", h.db.Dialect().Boolean(in.Action == "enable"), h.now().UTC().Format(time.RFC3339Nano), id)
 	if err != nil {

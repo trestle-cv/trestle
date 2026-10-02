@@ -41,6 +41,7 @@ import (
 	"github.com/trestle-cv/trestle/internal/operations"
 	productprop "github.com/trestle-cv/trestle/internal/propagation"
 	"github.com/trestle-cv/trestle/internal/records"
+	"github.com/trestle-cv/trestle/internal/replicated"
 	"github.com/trestle-cv/trestle/internal/rules"
 	replruntime "github.com/trestle-cv/trestle/internal/runtime"
 	"github.com/trestle-cv/trestle/internal/server"
@@ -280,6 +281,10 @@ func main() {
 		defer replicatedRuntime.Close()
 		collectionAdmin.SetMutationAuthority(replicatedRuntime.Controller)
 		recordAPI.SetMutationAuthority(replicatedRuntime.Controller)
+		jobAPI.SetTransitioner(replicatedRuntime.Controller)
+		jobAPI.SetLeaderGate(func() bool { return replicatedRuntime.Node.State() == raft.Leader })
+		webhookAPI.SetMutationAuthority(replicatedRuntime.Controller)
+		functionAPI.SetMutationAuthority(replicatedRuntime.Controller)
 	}
 	propagationManager := &coreprop.Manager{Adapter: productprop.New(database.DB()), Store: productprop.NewStateStore(database.DB())}
 	clusterHandler := &clusterapi.HTTPHandler{Service: clusterService, Transport: clusterTransport, Auth: admin, Version: buildinfo.Current().Version, Propagation: propagationManager}
@@ -319,7 +324,30 @@ func main() {
 			}
 			mode, ready := rr.Controller.State()
 			cfgs, _ := rr.Node.Configuration()
-			_ = json.NewEncoder(w).Encode(map[string]any{"mode": mode.String(), "readiness": ready.String(), "state": rr.Node.State().String(), "leader": func() string { _, id := rr.Node.Leader(); return string(id) }(), "servers": cfgs})
+			_, leaderID := rr.Node.Leader()
+			status := map[string]any{
+				"mode": mode.String(), "readiness": ready.String(), "state": rr.Node.State().String(), "leader": string(leaderID), "servers": cfgs,
+				"lambdaConfigured": cfg.AWSAccessKey != "" && cfg.AWSSecretKey != "",
+			}
+			if fp, e := webhooks.KeyFingerprint(cfg.DataDir); e == nil {
+				status["webhookKeyFingerprint"] = fp
+			}
+			_ = json.NewEncoder(w).Encode(status)
+		})
+		adminRoutes.HandleFunc("/admin/v1/replication/transfer", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method", 405)
+				return
+			}
+			if _, ok := admin.Authorize(r, true); !ok {
+				http.Error(w, "forbidden", 403)
+				return
+			}
+			if e := rr.Node.LeadershipTransfer(); e != nil {
+				http.Error(w, e.Error(), 409)
+				return
+			}
+			w.WriteHeader(204)
 		})
 		adminRoutes.HandleFunc("/admin/v1/replication/join", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
@@ -331,12 +359,26 @@ func main() {
 				return
 			}
 			var in struct {
-				NodeID  string `json:"node_id"`
-				Address string `json:"address"`
+				NodeID                string `json:"node_id"`
+				Address               string `json:"address"`
+				WebhookKeyFingerprint string `json:"webhook_key_fingerprint"`
 			}
 			if json.NewDecoder(r.Body).Decode(&in) != nil || in.NodeID == "" || in.Address == "" {
 				http.Error(w, "bad request", 400)
 				return
+			}
+			// Cluster-uniform webhook key enforcement: the joining node's
+			// webhook-key fingerprint must match this cluster's canonical
+			// fingerprint (the leader's, which is the bootstrap node's unless
+			// operators already converged keys). A mismatch would leave a
+			// future leader holding replicated webhook ciphertext it cannot
+			// decrypt. Only the fingerprint is exchanged; the key never leaves
+			// a node.
+			if localFp, fpErr := webhooks.KeyFingerprint(cfg.DataDir); fpErr == nil {
+				if ok, reason := replicated.WebhookKeyAdmissionOK(localFp, in.WebhookKeyFingerprint); !ok {
+					http.Error(w, reason, 409)
+					return
+				}
 			}
 			if e := rr.Node.AddVoter(raft.ServerID(in.NodeID), raft.ServerAddress(in.Address)); e != nil {
 				http.Error(w, e.Error(), 409)

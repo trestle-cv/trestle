@@ -24,6 +24,7 @@ func runReplicate(args []string) error {
 	url := fs.String("url", "", "Trestle base URL (default from TRESTLE_URL or http://127.0.0.1:7336)")
 	user := fs.String("user", "admin", "admin username")
 	pass := fs.String("pass", "", "admin password (default TRESTLE_ADMIN_PASSWORD)")
+	webhookKeyFingerprint := fs.String("webhook-key-fingerprint", "", "SHA-256 fingerprint of the joining node's webhook.key (from its `trestle replicate status`), required by `join` so a mismatched key cannot join")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -63,10 +64,10 @@ func runReplicate(args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
 	case "join":
-		if fs.NArg() != 2 {
-			return errors.New("usage: trestle replicate join <node-id> <raft-address>")
+		if fs.NArg() != 2 || *webhookKeyFingerprint == "" {
+			return errors.New("usage: trestle replicate join <node-id> <raft-address> --webhook-key-fingerprint <fingerprint>")
 		}
-		payload := map[string]string{"node_id": fs.Arg(0), "address": fs.Arg(1)}
+		payload := map[string]string{"node_id": fs.Arg(0), "address": fs.Arg(1), "webhook_key_fingerprint": *webhookKeyFingerprint}
 		body, err := replicateCall(client, *url, http.MethodPost, "/admin/v1/replication/join", payload, session)
 		if err != nil {
 			return err

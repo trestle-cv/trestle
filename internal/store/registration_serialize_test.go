@@ -42,6 +42,24 @@ func buildExistingV14(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec(`CREATE TABLE _trestle_admins (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL, disabled_at TEXT) STRICT`); err != nil {
 		t.Fatal(err)
 	}
+	// A real pre-v15 deployment also carries the tables created by migrations
+	// 1..14; migration 24 (replicated consequence identity) touches the event
+	// and audit tables, so the fixture must include them for an upgrade run.
+	if _, err := db.Exec(`CREATE TABLE _trestle_audit (id INTEGER PRIMARY KEY, occurred_at TEXT NOT NULL, actor_kind TEXT NOT NULL, actor_id TEXT, action TEXT NOT NULL, target TEXT, outcome TEXT NOT NULL, request_id TEXT, details_json TEXT NOT NULL DEFAULT '{}') STRICT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE INDEX _trestle_audit_occurred ON _trestle_audit(occurred_at DESC,id DESC)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE INDEX _trestle_audit_action ON _trestle_audit(action,id DESC)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE _trestle_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, occurred_at TEXT NOT NULL, topic TEXT NOT NULL, collection_name TEXT, record_id TEXT, payload_json TEXT NOT NULL) STRICT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE INDEX _trestle_events_topic_sequence ON _trestle_events(topic,sequence)`); err != nil {
+		t.Fatal(err)
+	}
 	now := "2026-01-01T00:00:00Z"
 	for i := 1; i <= 14; i++ {
 		if _, err := db.Exec("INSERT INTO _trestle_schema_migrations(version,name,applied_at) VALUES(?,?,?)", i, migrations[i-1].name, now); err != nil {

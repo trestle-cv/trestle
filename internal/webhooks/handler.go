@@ -8,14 +8,17 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/adminauth"
 	"github.com/trestle-cv/trestle/internal/httperr"
 	"github.com/trestle-cv/trestle/internal/jobs"
+	"github.com/trestle-cv/trestle/internal/replpayload"
 	"github.com/trestle-cv/trestle/internal/store"
 	"io"
 	"net"
@@ -27,13 +30,21 @@ import (
 	"time"
 )
 
+// WebhookAuthority routes webhook definition mutations through the replicated
+// authority in clustered mode. It is nil in standalone mode.
+type WebhookAuthority interface {
+	PutWebhook(context.Context, replpayload.WebhookPayload) (*replication.ApplyResult, error)
+	DeleteWebhook(context.Context, string) (*replication.ApplyResult, error)
+}
+
 type Handler struct {
-	db     store.Executor
-	admin  *adminauth.Handler
-	jobs   *jobs.Handler
-	aead   cipher.AEAD
-	now    func() time.Time
-	client *http.Client
+	db        store.Executor
+	admin     *adminauth.Handler
+	jobs      *jobs.Handler
+	aead      cipher.AEAD
+	now       func() time.Time
+	client    *http.Client
+	authority WebhookAuthority
 }
 type target struct {
 	ID        string   `json:"id"`
@@ -64,6 +75,7 @@ func New(db any, admin *adminauth.Handler, queue *jobs.Handler, dataDir string) 
 	queue.Register("webhook", h.execute)
 	return h, nil
 }
+func (h *Handler) SetMutationAuthority(a WebhookAuthority) { h.authority = a }
 func (h *Handler) Dispatch(ctx context.Context, tx store.Transaction, topic, collection, recordID string, payload any) error {
 	rows, err := tx.QueryContext(ctx, "SELECT id,topics FROM _trestle_webhooks WHERE enabled=?", h.db.Dialect().Boolean(true))
 	if err != nil {
@@ -156,6 +168,16 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	encrypted, _ := h.encrypt(secret)
 	id := "wh_" + token(12)
 	now := h.now().UTC().Format(time.RFC3339Nano)
+	if h.authority != nil {
+		wp := replpayload.WebhookPayload{ID: id, Name: in.Name, URL: in.URL, Topics: strings.Join(in.Topics, ","), SecretCipher: encrypted, Enabled: true, CreatedAt: now, UpdatedAt: now}
+		if _, err := h.authority.PutWebhook(r.Context(), wp); err == nil {
+			writeJSON(w, 201, map[string]any{"id": id, "secret": string(secret), "warning": "copy this signing secret now"})
+			return
+		} else if !errors.Is(err, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", err.Error())
+			return
+		}
+	}
 	_, err := h.db.ExecContext(r.Context(), "INSERT INTO _trestle_webhooks(id,name,url,topics,secret_cipher,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", id, in.Name, in.URL, strings.Join(in.Topics, ","), encrypted, now, now)
 	if err != nil {
 		http.Error(w, "create failed", 409)
@@ -185,6 +207,27 @@ func (h *Handler) action(w http.ResponseWriter, r *http.Request, id string) {
 	if in.Action != "enable" && in.Action != "disable" {
 		http.Error(w, "invalid action", 400)
 		return
+	}
+	if h.authority != nil {
+		var wp replpayload.WebhookPayload
+		var enabledRaw any
+		err := h.db.QueryRowContext(r.Context(), "SELECT id,name,url,topics,secret_cipher,enabled,created_at,updated_at FROM _trestle_webhooks WHERE id=?", id).Scan(&wp.ID, &wp.Name, &wp.URL, &wp.Topics, &wp.SecretCipher, &enabledRaw, &wp.CreatedAt, &wp.UpdatedAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, 404, "webhook_not_found", "The webhook was not found.")
+			return
+		} else if err != nil {
+			writeError(w, 500, "internal_error", "The request could not be completed.")
+			return
+		}
+		wp.Enabled = in.Action == "enable"
+		wp.UpdatedAt = h.now().UTC().Format(time.RFC3339Nano)
+		if _, err := h.authority.PutWebhook(r.Context(), wp); err == nil {
+			w.WriteHeader(204)
+			return
+		} else if !errors.Is(err, replication.ErrStandalone) {
+			writeError(w, 503, "replication_unavailable", err.Error())
+			return
+		}
 	}
 	result, err := h.db.ExecContext(r.Context(), "UPDATE _trestle_webhooks SET enabled=?,updated_at=? WHERE id=?", h.db.Dialect().Boolean(in.Action == "enable"), h.now().UTC().Format(time.RFC3339Nano), id)
 	if err != nil {
@@ -243,6 +286,21 @@ func loadKey(path string) ([]byte, error) {
 		return nil, err
 	}
 	return value, nil
+}
+
+// KeyFingerprint returns the SHA-256 fingerprint of the node's webhook.key, or
+// an error when the key file is absent. The fingerprint is a non-secret
+// identity used to enforce cluster-uniform webhook decrypt material across a
+// replicated cluster: only the fingerprint crosses the network or enters
+// replication capabilities, never the key itself. An absent key means the node
+// has no webhook secret material and advertises no fingerprint constraint.
+func KeyFingerprint(dataDir string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(dataDir, "webhook.key"))
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 func contains(values []string, want string) bool {
 	for _, v := range values {

@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CurrentVersion = 23
+const CurrentVersion = 24
 
 type Store struct {
 	db                    *sql.DB
@@ -401,6 +401,11 @@ ALTER TABLE _trestle_propagation_profiles ADD COLUMN last_run_at TEXT;
 `}, {23, "administrator username", `
 ALTER TABLE _trestle_admins ADD COLUMN username TEXT;
 UPDATE _trestle_admins SET username = substr(email, 1, instr(email, '@') - 1) WHERE username IS NULL OR trim(username) = '';
+`}, {24, "replicated consequence identity", `
+ALTER TABLE _trestle_events ADD COLUMN dedup_key TEXT;
+CREATE UNIQUE INDEX _trestle_events_dedup ON _trestle_events(dedup_key);
+ALTER TABLE _trestle_audit ADD COLUMN dedup_key TEXT;
+CREATE UNIQUE INDEX _trestle_audit_dedup ON _trestle_audit(dedup_key);
 `}}
 
 func Open(ctx context.Context, dataDir string) (*Store, error) {

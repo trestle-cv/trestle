@@ -9,6 +9,7 @@ import (
 	"github.com/gantry-tools/gantry-core/replication"
 	"github.com/trestle-cv/trestle/internal/collections"
 	"github.com/trestle-cv/trestle/internal/records"
+	"github.com/trestle-cv/trestle/internal/replpayload"
 	"sync/atomic"
 )
 
@@ -72,4 +73,39 @@ func (c *Controller) PutRecord(ctx context.Context, r records.ReplicatedRecord) 
 }
 func (c *Controller) DeleteRecord(ctx context.Context, r records.ReplicatedRecord) (*replication.ApplyResult, error) {
 	return c.Propose(ctx, KindRecordDelete, r.RecordID, r.Version, r)
+}
+func (c *Controller) PutRecords(ctx context.Context, rs []records.ReplicatedRecord) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindRecordBatchPut, "batch", 0, rs)
+}
+func (c *Controller) PutWebhook(ctx context.Context, w replpayload.WebhookPayload) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindWebhookPut, w.ID, 0, w)
+}
+func (c *Controller) DeleteWebhook(ctx context.Context, id string) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindWebhookDelete, id, 0, replpayload.WebhookPayload{ID: id})
+}
+func (c *Controller) PutFunction(ctx context.Context, fn replpayload.FunctionPayload) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindFunctionPut, fn.ID, 0, fn)
+}
+func (c *Controller) DeleteFunction(ctx context.Context, id string) (*replication.ApplyResult, error) {
+	return c.Propose(ctx, KindFunctionDelete, id, 0, replpayload.FunctionPayload{ID: id})
+}
+func (c *Controller) ClaimJob(ctx context.Context, id string) error {
+	_, e := c.Propose(ctx, KindJobClaim, id, 0, JobPayload{ID: id})
+	return e
+}
+func (c *Controller) CompleteJob(ctx context.Context, id string, ok bool, errMsg string) error {
+	_, e := c.Propose(ctx, KindJobComplete, id, 0, JobPayload{ID: id, OK: ok, Error: errMsg})
+	return e
+}
+func (c *Controller) ReleaseStale(ctx context.Context) error {
+	_, e := c.Propose(ctx, KindJobReleaseStale, "stale", 0, ReleaseStalePayload{Marker: "release"})
+	return e
+}
+func (c *Controller) CancelJob(ctx context.Context, id string) error {
+	_, e := c.Propose(ctx, KindJobCancel, id, 0, JobPayload{ID: id})
+	return e
+}
+func (c *Controller) RetryJob(ctx context.Context, id string) error {
+	_, e := c.Propose(ctx, KindJobRetry, id, 0, JobPayload{ID: id})
+	return e
 }

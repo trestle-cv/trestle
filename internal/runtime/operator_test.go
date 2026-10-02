@@ -2,12 +2,15 @@ package runtime
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	corerepl "github.com/gantry-tools/gantry-core/replication"
 	"github.com/hashicorp/raft"
@@ -57,6 +60,21 @@ func operatorHandler(t *testing.T, n *certNode, admin *adminauth.Handler) http.H
 		}
 		if e := n.rt.Node.Snapshot(); e != nil {
 			http.Error(w, e.Error(), 500)
+			return
+		}
+		w.WriteHeader(204)
+	})
+	mux.HandleFunc("/admin/v1/replication/transfer", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", 405)
+			return
+		}
+		if _, ok := admin.Authorize(r, true); !ok {
+			http.Error(w, "forbidden", 403)
+			return
+		}
+		if e := n.rt.Node.LeadershipTransfer(); e != nil {
+			http.Error(w, e.Error(), 409)
 			return
 		}
 		w.WriteHeader(204)
@@ -123,6 +141,61 @@ func opCall(t *testing.T, h http.Handler, method, path string, body any, cookie 
 // TestReplicationOperatorAuthorization certifies the operator surface:
 // admin-only status/join/snapshot with CSRF, unauthenticated rejection,
 // non-admin rejection, standalone fail-closed and malformed-join rejection.
+// TestReplicationLeadershipTransferEndpoint certifies the operator surface for
+// transferring leadership to a credentials-capable voter: authenticated, CSRF
+// protected, leader-aware (a follower's transfer is refused), and effective.
+func TestReplicationLeadershipTransferEndpoint(t *testing.T) {
+	ca := newCertCA(t)
+	pool := x509.NewCertPool()
+	pool.AddCert(ca.cert)
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}}}
+	ctx := context.Background()
+	const aToB, bToA = "A_to_B", "B_to_A"
+	a := buildNode(t, ctx, ca, t.TempDir(), "A", freePort(t), map[string][2]string{"B": {aToB, bToA}}, true, httpClient)
+	b := buildNode(t, ctx, ca, t.TempDir(), "B", freePort(t), map[string][2]string{"A": {bToA, aToB}}, false, httpClient)
+	setEndpoint(t, a.store.DB(), "B", b.srv.URL)
+	setEndpoint(t, b.store.DB(), "A", a.srv.URL)
+	waitReady(t, a, corerepl.ReadinessReadyLeader)
+	if e := a.rt.Node.AddVoter("B", b.rt.Node.Address()); e != nil {
+		t.Fatalf("join B: %v", e)
+	}
+	waitReady(t, b, corerepl.ReadinessReadyFollower)
+
+	s, e := store.Open(ctx, t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { s.Close() })
+	admin := adminauth.New(s.DB(), "sqlite")
+	h := operatorHandler(t, a, admin)
+	cookie, csrf := adminSession(t, h)
+
+	// Transfer requires admin session + CSRF (mutation).
+	if w := opCall(t, h, http.MethodPost, "/admin/v1/replication/transfer", nil, cookie, ""); w.Code != 403 {
+		t.Fatalf("transfer without CSRF: %d", w.Code)
+	}
+	if w := opCall(t, h, http.MethodPost, "/admin/v1/replication/transfer", nil, cookie, csrf); w.Code != 204 {
+		t.Fatalf("transfer: %d %s", w.Code, w.Body.String())
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if isLeader(b) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !isLeader(b) {
+		t.Fatal("leadership did not transfer to B")
+	}
+	waitReady(t, b, corerepl.ReadinessReadyLeader)
+
+	// The former leader is now a follower; a transfer from it is refused
+	// (leader-aware endpoint).
+	if w := opCall(t, h, http.MethodPost, "/admin/v1/replication/transfer", nil, cookie, csrf); w.Code != 409 {
+		t.Fatalf("transfer from follower: %d (want 409)", w.Code)
+	}
+}
+
 func TestReplicationOperatorAuthorization(t *testing.T) {
 	ca := newCertCA(t)
 	ctx := context.Background()

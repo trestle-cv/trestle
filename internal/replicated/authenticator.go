@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gantry-tools/gantry-core/replication"
@@ -15,16 +16,37 @@ import (
 
 const replicationCapability = "replication"
 
-type Authenticator struct {
-	db        store.Executor
-	protocol  int
-	localID   raft.ServerID
-	localCaps string
-	now       func() time.Time
+const webhookKeyFeaturePrefix = "webhook_key_fingerprint:"
+
+// WebhookKeyFingerprintFeature returns the capability feature a node advertises
+// to carry its non-secret webhook-key fingerprint through the authenticated
+// replication handshake. The raw key never leaves the node.
+func WebhookKeyFingerprintFeature(fingerprint string) string {
+	return webhookKeyFeaturePrefix + fingerprint
 }
 
-func NewAuthenticator(db store.Executor, protocol int) *Authenticator {
-	a := &Authenticator{db: db, protocol: protocol, now: time.Now}
+// webhookKeyFingerprintFromFeatures extracts a peer's advertised webhook-key
+// fingerprint, or "" when none is advertised.
+func webhookKeyFingerprintFromFeatures(features []string) string {
+	for _, f := range features {
+		if len(f) > len(webhookKeyFeaturePrefix) && strings.HasPrefix(f, webhookKeyFeaturePrefix) {
+			return f[len(webhookKeyFeaturePrefix):]
+		}
+	}
+	return ""
+}
+
+type Authenticator struct {
+	db                    store.Executor
+	protocol              int
+	localID               raft.ServerID
+	localCaps             string
+	webhookKeyFingerprint string
+	now                   func() time.Time
+}
+
+func NewAuthenticator(db store.Executor, protocol int, webhookKeyFingerprint string) *Authenticator {
+	a := &Authenticator{db: db, protocol: protocol, webhookKeyFingerprint: webhookKeyFingerprint, now: time.Now}
 	_ = db.QueryRow(`SELECT node_id,capabilities_json FROM _trestle_cluster_identity WHERE singleton=1`).Scan(&a.localID, &a.localCaps)
 	return a
 }
@@ -53,6 +75,9 @@ func (a *Authenticator) Authenticate(ctx context.Context, in replication.AuthReq
 	if in.Protocol != a.protocol {
 		return replication.AuthResult{}, errors.New("incompatible replication protocol")
 	}
+	if e := a.checkWebhookKeyCompatibility(in); e != nil {
+		return replication.AuthResult{}, e
+	}
 	state, caps, _, hash, err := a.member(ctx, string(in.NodeID))
 	if err != nil || state != "active" || !hasCap(caps) {
 		return replication.AuthResult{}, errors.New("replication member unavailable")
@@ -73,6 +98,9 @@ func (a *Authenticator) VerifyPeer(ctx context.Context, expected raft.ServerID, 
 	if in.Protocol != a.protocol {
 		return errors.New("incompatible replication protocol")
 	}
+	if e := a.checkWebhookKeyCompatibility(in); e != nil {
+		return e
+	}
 	state, caps, _, hash, err := a.member(ctx, string(expected))
 	if err != nil || state != "active" || !hasCap(caps) {
 		return errors.New("replication member unavailable")
@@ -82,6 +110,46 @@ func (a *Authenticator) VerifyPeer(ctx context.Context, expected raft.ServerID, 
 		return errors.New("replication credential rejected")
 	}
 	return a.consume(ctx, string(expected), in.Nonce)
+}
+
+// checkWebhookKeyCompatibility enforces cluster-uniform webhook decrypt
+// material: when this node holds a webhook key, a peer that advertises a
+// different (or no) webhook-key fingerprint cannot establish a replication
+// connection, so it can never become an eligible voter or execute replicated
+// webhook work after failover. Only fingerprints travel in capabilities; the
+// raw key never crosses the network, enters raft, or appears in diagnostics.
+func (a *Authenticator) checkWebhookKeyCompatibility(in replication.AuthRequest) error {
+	if a.webhookKeyFingerprint == "" {
+		// No local webhook key material configured: no constraint.
+		return nil
+	}
+	peer := webhookKeyFingerprintFromFeatures(in.Capabilities.Features)
+	if peer == "" {
+		return errors.New("replication peer does not advertise a webhook key fingerprint")
+	}
+	if peer != a.webhookKeyFingerprint {
+		return errors.New("replication webhook key fingerprint mismatch")
+	}
+	return nil
+}
+
+// WebhookKeyAdmissionOK reports whether a prospective voter's webhook-key
+// fingerprint is compatible with the cluster (canonical) fingerprint before
+// raft voter admission. A cluster that holds no webhook key material enforces
+// no constraint; otherwise a missing or mismatched member fingerprint is
+// refused so a future leader can never hold replicated webhook ciphertext it
+// cannot decrypt.
+func WebhookKeyAdmissionOK(clusterFingerprint, memberFingerprint string) (bool, string) {
+	if clusterFingerprint == "" {
+		return true, ""
+	}
+	if memberFingerprint == "" {
+		return false, "webhook_key_fingerprint is required to join a replicated Trestle cluster"
+	}
+	if memberFingerprint != clusterFingerprint {
+		return false, "webhook key fingerprint mismatch: the joining node's webhook key is incompatible with this cluster's replicated webhook ciphertext"
+	}
+	return true, ""
 }
 func equal(a, b []byte) bool {
 	if len(a) != len(b) {
@@ -121,7 +189,11 @@ func (a *Authenticator) Membership(ctx context.Context, id raft.ServerID) (repli
 	return replication.MembershipStatus{State: st, Protocol: a.protocol, ReplicationEnabled: hasCap(caps), Capabilities: a.caps(id, caps)}, nil
 }
 func (a *Authenticator) caps(id raft.ServerID, raw string) replication.Capabilities {
-	return replication.Capabilities{ID: id, OperationSchemaVersions: []int{1, replication.Version}, SnapshotFormatVersions: []int{replication.SnapshotFormatVersion}}
+	features := []string{}
+	if a.webhookKeyFingerprint != "" {
+		features = append(features, WebhookKeyFingerprintFeature(a.webhookKeyFingerprint))
+	}
+	return replication.Capabilities{ID: id, OperationSchemaVersions: []int{1, replication.Version}, SnapshotFormatVersions: []int{replication.SnapshotFormatVersion}, Features: features}
 }
 func (a *Authenticator) CapabilitiesOf(id raft.ServerID) (replication.Capabilities, bool) {
 	if id == a.localID {

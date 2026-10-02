@@ -11,6 +11,7 @@ import (
 	clusterapi "github.com/trestle-cv/trestle/internal/cluster"
 	"github.com/trestle-cv/trestle/internal/replicated"
 	"github.com/trestle-cv/trestle/internal/store"
+	"github.com/trestle-cv/trestle/internal/webhooks"
 	"io"
 	"net/http"
 	"os"
@@ -18,6 +19,16 @@ import (
 	"sync"
 	"time"
 )
+
+// advertisedFeatures returns the replication capability features a node
+// advertises in every authenticated handshake. Only the non-secret webhook-key
+// fingerprint is advertised; the raw key never leaves the node.
+func advertisedFeatures(webhookKeyFingerprint string) []string {
+	if webhookKeyFingerprint == "" {
+		return nil
+	}
+	return []string{replicated.WebhookKeyFingerprintFeature(webhookKeyFingerprint)}
+}
 
 type Replicated struct {
 	Controller *replicated.Controller
@@ -68,8 +79,14 @@ func NewReplication(ctx context.Context, o ReplicationOptions) (*Replicated, err
 	if e != nil {
 		return nil, e
 	}
-	auth := replicated.NewAuthenticator(o.DB, replication.Version)
-	nt, e := replication.NewNetTransport(replication.NetTransportOptions{ID: raft.ServerID(o.NodeID), Address: raft.ServerAddress(o.Address), Authenticator: auth, Membership: auth, PeerCredentials: auth, TLSConfig: o.TLS, Protocol: replication.Version, Capabilities: replication.Capabilities{ID: raft.ServerID(o.NodeID), OperationSchemaVersions: []int{replication.Version}, SnapshotFormatVersions: []int{replication.SnapshotFormatVersion}}, RevalidateEvery: o.Timing.RevalidateEvery, InsecureAllowPlaintext: o.Insecure})
+	webhookKeyFingerprint := ""
+	if fp, e := webhooks.KeyFingerprint(o.DataDir); e == nil {
+		webhookKeyFingerprint = fp
+	} else if !errors.Is(e, os.ErrNotExist) {
+		return nil, fmt.Errorf("read webhook key fingerprint: %w", e)
+	}
+	auth := replicated.NewAuthenticator(o.DB, replication.Version, webhookKeyFingerprint)
+	nt, e := replication.NewNetTransport(replication.NetTransportOptions{ID: raft.ServerID(o.NodeID), Address: raft.ServerAddress(o.Address), Authenticator: auth, Membership: auth, PeerCredentials: auth, TLSConfig: o.TLS, Protocol: replication.Version, Capabilities: replication.Capabilities{ID: raft.ServerID(o.NodeID), OperationSchemaVersions: []int{replication.Version}, SnapshotFormatVersions: []int{replication.SnapshotFormatVersion}, Features: advertisedFeatures(webhookKeyFingerprint)}, RevalidateEvery: o.Timing.RevalidateEvery, InsecureAllowPlaintext: o.Insecure})
 	if e != nil {
 		return nil, e
 	}
@@ -80,7 +97,36 @@ func NewReplication(ctx context.Context, o ReplicationOptions) (*Replicated, err
 	}
 	sn, e := raft.NewFileSnapshotStore(filepath.Join(dir, "snapshots"), 3, nil)
 	if e != nil {
+		bs.Close()
+		nt.Close()
 		return nil, e
+	}
+	// Join/bootstrap invariant: a node that has no raft history and is not
+	// bootstrapping this cluster must start from empty consensus-owned
+	// application state. Raft may catch a new voter up by replaying retained
+	// log entries without installing a snapshot; replaying on top of arbitrary
+	// pre-existing local rows would not produce canonical cluster state. A
+	// first-time member must therefore be clean (or explicitly reseeded from
+	// canonical state). An existing member restart retains its own canonical
+	// DB + raft state and is always allowed.
+	hasRaftState, e := raft.HasExistingState(bs, bs, sn)
+	if e != nil {
+		bs.Close()
+		nt.Close()
+		return nil, e
+	}
+	if !o.Bootstrap && !hasRaftState {
+		empty, e := replicated.ConsensusTablesEmpty(o.DB)
+		if e != nil {
+			bs.Close()
+			nt.Close()
+			return nil, e
+		}
+		if !empty {
+			bs.Close()
+			nt.Close()
+			return nil, errors.New("replication join refused: node has pre-existing consensus-owned application state (collections, records, events, audit, jobs, webhook or function definitions) but no replicated history; a node joining a Trestle cluster for the first time must start with empty consensus-owned tables or be reseeded from canonical cluster state")
+		}
 	}
 	node, e := replication.NewNode(replication.NodeOptions{ID: raft.ServerID(o.NodeID), Address: raft.ServerAddress(o.Address), Transport: nt, LogStore: bs, StableStore: bs, SnapshotStore: sn, FSM: fsm, Bootstrap: o.Bootstrap, CapabilitySource: auth, HeartbeatTimeout: o.Timing.HeartbeatTimeout, ElectionTimeout: o.Timing.ElectionTimeout, CommitTimeout: o.Timing.CommitTimeout, LeaderLeaseTimeout: o.Timing.LeaderLeaseTimeout, ProposeTimeout: o.Timing.ProposeTimeout})
 	if e != nil {

@@ -14,6 +14,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -413,6 +415,75 @@ func isLeader(n *certNode) bool { return n.rt.Node.State() == raft.Leader }
 // TestThreeNodeProductionCertification exercises the production-shaped cluster:
 // real TLS transports, explicit raft membership, leader + follower-forwarded
 // mutations, convergence, leader loss/failover and caller idempotency.
+// TestWebhookKeyMismatchBlocksVoterAdmission proves a prospective voter holding
+// a webhook key incompatible with the cluster cannot participate: the
+// authenticated replication handshake refuses the mismatched peer, so the node
+// never catches up, never becomes ready, and never applies replicated state.
+// This is the failover-correctness gate behind the join-endpoint fingerprint
+// admission check.
+func TestWebhookKeyMismatchBlocksVoterAdmission(t *testing.T) {
+	ca := newCertCA(t)
+	pool := x509.NewCertPool()
+	pool.AddCert(ca.cert)
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}}}
+	ctx := context.Background()
+
+	keyA := make([]byte, 32)
+	for i := range keyA {
+		keyA[i] = 1
+	}
+	keyC := make([]byte, 32)
+	for i := range keyC {
+		keyC[i] = 2
+	}
+	seedKey := func(dir string, key []byte) string {
+		if err := os.WriteFile(filepath.Join(dir, "webhook.key"), key, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	dirA := seedKey(t.TempDir(), keyA)
+	dirB := seedKey(t.TempDir(), keyA)
+	dirC := seedKey(t.TempDir(), keyC)
+
+	const aToB, bToA = "A_to_B", "B_to_A"
+	const aToC, cToA = "A_to_C", "C_to_A"
+	a := buildNode(t, ctx, ca, dirA, "A", freePort(t), map[string][2]string{"B": {aToB, bToA}, "C": {aToC, cToA}}, true, httpClient)
+	b := buildNode(t, ctx, ca, dirB, "B", freePort(t), map[string][2]string{"A": {bToA, aToB}}, false, httpClient)
+	c := buildNode(t, ctx, ca, dirC, "C", freePort(t), map[string][2]string{"A": {cToA, aToC}}, false, httpClient)
+	setEndpoint(t, a.store.DB(), "B", b.srv.URL)
+	setEndpoint(t, a.store.DB(), "C", c.srv.URL)
+	setEndpoint(t, b.store.DB(), "A", a.srv.URL)
+	setEndpoint(t, c.store.DB(), "A", a.srv.URL)
+
+	// Matching-key node B joins and catches up normally.
+	waitReady(t, a, corerepl.ReadinessReadyLeader)
+	if e := a.rt.Node.AddVoter("B", b.rt.Node.Address()); e != nil {
+		t.Fatalf("join B: %v", e)
+	}
+	waitReady(t, b, corerepl.ReadinessReadyFollower)
+
+	// Mismatched-key node C is admitted at the raft config layer (raw AddVoter,
+	// bypassing the product join endpoint), but the transport handshake refuses
+	// it: C must never catch up, become ready, or apply replicated state.
+	if e := a.rt.Node.AddVoter("C", c.rt.Node.Address()); e != nil {
+		t.Logf("AddVoter C refused: %v", e)
+	}
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		idx, _ := c.rt.FSM.AppliedIndex()
+		if idx > 0 {
+			t.Fatalf("mismatched-key node C applied replicated state (index %d)", idx)
+		}
+		if _, ready := c.rt.Controller.State(); ready == corerepl.ReadinessReadyFollower || ready == corerepl.ReadinessReadyLeader {
+			t.Fatalf("mismatched-key node C reached readiness %v", ready)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	// The cluster remains coherent without C (A+B quorum keeps working).
+	waitReady(t, a, corerepl.ReadinessReadyLeader)
+}
+
 func TestThreeNodeProductionCertification(t *testing.T) {
 	ca := newCertCA(t)
 	pool := x509.NewCertPool()

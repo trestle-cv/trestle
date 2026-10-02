@@ -49,10 +49,24 @@ type ReplicatedRecord struct {
 	UpdatedAt      string         `json:"updated_at"`
 	Values         map[string]any `json:"values"`
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	// Event/audit consequence inputs carried with the replicated mutation so a
+	// follower-forwarded write produces the same durable consequences as the
+	// same request made directly to the leader. Audit fields are empty for
+	// delete, matching the standalone handler.
+	Topic          string         `json:"topic,omitempty"`
+	EventPayload   map[string]any `json:"event_payload,omitempty"`
+	ActorKind      string         `json:"actor_kind,omitempty"`
+	ActorID        string         `json:"actor_id,omitempty"`
+	AuditAction    string         `json:"audit_action,omitempty"`
+	AuditTarget    string         `json:"audit_target,omitempty"`
+	AuditOutcome   string         `json:"audit_outcome,omitempty"`
+	AuditRequestID string         `json:"audit_request_id,omitempty"`
+	AuditDetails   map[string]any `json:"audit_details,omitempty"`
 }
 type MutationAuthority interface {
 	PutRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
 	DeleteRecord(context.Context, ReplicatedRecord) (*replication.ApplyResult, error)
+	PutRecords(context.Context, []ReplicatedRecord) (*replication.ApplyResult, error)
 }
 
 func (h *Handler) SetMutationAuthority(a MutationAuthority) { h.authority = a }
@@ -300,7 +314,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, s schema) {
 			return
 		}
 		now := h.now().UTC().Format(time.RFC3339Nano)
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values, IdempotencyKey: key}
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values, IdempotencyKey: key,
+			Topic: "record.created", EventPayload: map[string]any{"values": values},
+			ActorKind: "admin", AuditAction: "record.create", AuditTarget: s.name + "/" + id, AuditOutcome: "success",
+			AuditRequestID: r.Header.Get("X-Trestle-Request-ID"), AuditDetails: map[string]any{"version": 1}}
 		ctx := r.Context()
 		if key != "" {
 			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)
@@ -367,6 +384,50 @@ func (h *Handler) batchCreate(w http.ResponseWriter, r *http.Request, s schema) 
 	if len(body.Records) == 0 || len(body.Records) > 1000 {
 		writeValidation(w, []httperr.Field{{Path: "records", Code: "size"}})
 		return
+	}
+	if h.authority != nil {
+		now := h.now().UTC().Format(time.RFC3339Nano)
+		reqID := r.Header.Get("X-Trestle-Request-ID")
+		rr := make([]ReplicatedRecord, 0, len(body.Records))
+		for _, in := range body.Records {
+			values, details := validateValues(s, in.Values)
+			if len(details) > 0 {
+				writeValidation(w, details)
+				return
+			}
+			id := in.ID
+			if id == "" {
+				id = newID("rec_")
+			}
+			if !validID(id) {
+				writeValidation(w, []httperr.Field{{Path: "id", Code: "invalid"}})
+				return
+			}
+			rr = append(rr, ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: 1, CreatedAt: now, UpdatedAt: now, Values: values,
+				Topic: "record.created", EventPayload: map[string]any{"values": values},
+				ActorKind: "admin", AuditAction: "record.create", AuditTarget: s.name + "/" + id, AuditOutcome: "success",
+				AuditRequestID: reqID, AuditDetails: map[string]any{"batch": true}})
+		}
+		if _, e := h.authority.PutRecords(r.Context(), rr); e == nil {
+			items := []Record{}
+			for _, item := range rr {
+				rec, fetchErr := h.fetch(r, s, item.RecordID)
+				if fetchErr != nil {
+					writeError(w, 500, "internal_error", fetchErr.Error())
+					return
+				}
+				items = append(items, projectRecord(rec, projection(r)))
+			}
+			writeJSON(w, 201, map[string]any{"items": items})
+			return
+		} else if !errors.Is(e, replication.ErrStandalone) {
+			if replerr.IsSemanticConflict(e) {
+				writeError(w, 409, "precondition_conflict", e.Error())
+				return
+			}
+			writeError(w, 503, "replication_unavailable", e.Error())
+			return
+		}
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -638,7 +699,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, s schema, id st
 	}
 	now := h.now().UTC().Format(time.RFC3339Nano)
 	if h.authority != nil {
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version + 1), CreatedAt: current.CreatedAt, UpdatedAt: now, Values: values}
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version + 1), CreatedAt: current.CreatedAt, UpdatedAt: now, Values: values,
+			Topic: "record.updated", EventPayload: map[string]any{"values": values, "version": version + 1},
+			ActorKind: "admin", AuditAction: "record.update", AuditTarget: s.name + "/" + id, AuditOutcome: "success",
+			AuditRequestID: r.Header.Get("X-Trestle-Request-ID"), AuditDetails: map[string]any{"version": version + 1}}
 		ctx := r.Context()
 		if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
 			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)
@@ -712,7 +776,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, s schema, id st
 		return
 	}
 	if h.authority != nil {
-		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version)}
+		rr := ReplicatedRecord{CollectionID: s.id, RecordID: id, Version: int64(version), Topic: "record.deleted", EventPayload: map[string]any{"version": version}}
 		ctx := r.Context()
 		if key := strings.TrimSpace(r.Header.Get("Idempotency-Key")); key != "" {
 			ctx = replication.WithRequestID(ctx, "trestle-idem-"+s.id+"-"+key)

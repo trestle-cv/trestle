@@ -16,12 +16,28 @@ import (
 )
 
 type Executor func(context.Context, json.RawMessage) error
+
+// JobTransitioner applies durable job lifecycle state transitions. In
+// standalone mode the local handler mutates _trestle_jobs directly; in
+// replicated mode every transition is a raft-mediated operation applied by the
+// consensus FSM, so replicas never diverge on job state.
+type JobTransitioner interface {
+	ClaimJob(ctx context.Context, id string) error
+	CompleteJob(ctx context.Context, id string, ok bool, errMsg string) error
+	ReleaseStale(ctx context.Context) error
+	CancelJob(ctx context.Context, id string) error
+	RetryJob(ctx context.Context, id string) error
+}
+
 type Handler struct {
-	db        store.Executor
-	admin     *adminauth.Handler
-	now       func() time.Time
-	mu        sync.RWMutex
-	executors map[string]Executor
+	db            store.Executor
+	admin         *adminauth.Handler
+	now           func() time.Time
+	mu            sync.RWMutex
+	executors     map[string]Executor
+	capableChecks map[string]func() bool
+	transitioner  JobTransitioner
+	leaderGate    func() bool
 }
 type Job struct {
 	ID          string          `json:"id"`
@@ -38,13 +54,33 @@ type Job struct {
 }
 
 func New(db any, admin *adminauth.Handler) *Handler {
-	return &Handler{db: store.Adapt(db), admin: admin, now: time.Now, executors: map[string]Executor{"noop": func(context.Context, json.RawMessage) error { return nil }}}
+	return &Handler{db: store.Adapt(db), admin: admin, now: time.Now, executors: map[string]Executor{"noop": func(context.Context, json.RawMessage) error { return nil }}, capableChecks: map[string]func() bool{}}
 }
 func (h *Handler) Register(kind string, executor Executor) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.executors[kind] = executor
 }
+
+// RegisterCapabilityCheck registers a predicate for a job kind. The worker
+// never claims a job whose kind's predicate reports false, leaving it pending
+// (observable) instead of burning attempts on a node that cannot execute it.
+func (h *Handler) RegisterCapabilityCheck(kind string, capable func() bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.capableChecks[kind] = capable
+}
+
+// SetTransitioner installs the raft-mediated job lifecycle transitioner used
+// in replicated mode. When nil the handler mutates _trestle_jobs locally
+// (standalone).
+func (h *Handler) SetTransitioner(t JobTransitioner) { h.transitioner = t }
+
+// SetLeaderGate installs a predicate the worker checks every tick. In
+// replicated mode only the raft leader runs the worker; a stale leader's
+// proposals fail closed. When nil the worker always runs.
+func (h *Handler) SetLeaderGate(gate func() bool) { h.leaderGate = gate }
+
 func (h *Handler) Enqueue(ctx context.Context, tx store.Transaction, kind string, payload any, idempotency string) (string, bool, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -86,6 +122,19 @@ func (h *Handler) Start(ctx context.Context) {
 	}()
 }
 func (h *Handler) runOne(ctx context.Context) {
+	if h.leaderGate != nil && !h.leaderGate() {
+		return
+	}
+	if h.transitioner != nil {
+		h.runOneReplicated(ctx)
+		return
+	}
+	h.runOneLocal(ctx)
+}
+
+// runOneLocal is the standalone claim/execute/finish path: it mutates
+// _trestle_jobs directly on this node.
+func (h *Handler) runOneLocal(ctx context.Context) {
 	now := h.now().UTC()
 	h.db.ExecContext(ctx, "UPDATE _trestle_jobs SET status='pending',lease_until=NULL,updated_at=? WHERE status='running' AND lease_until<?", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	tx, err := h.db.BeginTx(ctx, nil)
@@ -105,6 +154,11 @@ func (h *Handler) runOne(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	if !h.capable(kind) {
+		// Leave the job pending rather than burning attempts on a node that
+		// cannot execute its kind.
+		return
+	}
 	lease := now.Add(30 * time.Second).Format(time.RFC3339Nano)
 	result, _ := tx.ExecContext(ctx, "UPDATE _trestle_jobs SET status='running',attempts=attempts+1,lease_until=?,updated_at=? WHERE id=? AND status='pending'", lease, now.Format(time.RFC3339Nano), id)
 	n, _ := result.RowsAffected()
@@ -119,6 +173,57 @@ func (h *Handler) runOne(ctx context.Context) {
 		runErr = executor(ctx, json.RawMessage(payload))
 	}
 	h.finish(ctx, id, runErr)
+}
+
+// runOneReplicated is the raft-mediated claim/execute/complete path used in
+// replicated mode: the durable lifecycle transitions are raft operations
+// proposed by the leader, while external execution runs outside raft.
+func (h *Handler) runOneReplicated(ctx context.Context) {
+	now := h.now().UTC()
+	if h.hasRunning(ctx) {
+		_ = h.transitioner.ReleaseStale(ctx)
+	}
+	var id, kind, payload string
+	err := h.db.QueryRowContext(ctx, "SELECT id,kind,payload_json FROM _trestle_jobs WHERE status='pending' AND available_at<=? ORDER BY available_at,id LIMIT 1", now.Format(time.RFC3339Nano)).Scan(&id, &kind, &payload)
+	if err != nil {
+		return
+	}
+	if !h.capable(kind) {
+		return
+	}
+	if err := h.transitioner.ClaimJob(ctx, id); err != nil {
+		return
+	}
+	h.mu.RLock()
+	executor := h.executors[kind]
+	h.mu.RUnlock()
+	runErr := errors.New("no executor registered")
+	if executor != nil {
+		runErr = executor(ctx, json.RawMessage(payload))
+	}
+	errMsg := ""
+	if runErr != nil {
+		errMsg = runErr.Error()
+	}
+	_ = h.transitioner.CompleteJob(ctx, id, runErr == nil, errMsg)
+}
+
+func (h *Handler) capable(kind string) bool {
+	h.mu.RLock()
+	fn, ok := h.capableChecks[kind]
+	h.mu.RUnlock()
+	if !ok {
+		return true
+	}
+	return fn()
+}
+
+func (h *Handler) hasRunning(ctx context.Context) bool {
+	var n int
+	if err := h.db.QueryRowContext(ctx, "SELECT count(*) FROM _trestle_jobs WHERE status='running'").Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
 }
 func (h *Handler) finish(ctx context.Context, id string, runErr error) {
 	now := h.now().UTC()
@@ -221,13 +326,20 @@ func (h *Handler) action(w http.ResponseWriter, r *http.Request, id string) {
 		Action string `json:"action"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
-	now := h.now().UTC().Format(time.RFC3339Nano)
 	var err error
 	switch in.Action {
 	case "cancel":
-		_, err = h.db.ExecContext(r.Context(), "UPDATE _trestle_jobs SET status='cancelled',lease_until=NULL,updated_at=? WHERE id=? AND status IN ('pending','running')", now, id)
+		if h.transitioner != nil {
+			err = h.transitioner.CancelJob(r.Context(), id)
+		} else {
+			_, err = h.db.ExecContext(r.Context(), "UPDATE _trestle_jobs SET status='cancelled',lease_until=NULL,updated_at=? WHERE id=? AND status IN ('pending','running')", h.now().UTC().Format(time.RFC3339Nano), id)
+		}
 	case "retry":
-		_, err = h.db.ExecContext(r.Context(), "UPDATE _trestle_jobs SET status='pending',attempts=0,available_at=?,lease_until=NULL,last_error=NULL,updated_at=? WHERE id=? AND status IN ('dead','cancelled')", now, now, id)
+		if h.transitioner != nil {
+			err = h.transitioner.RetryJob(r.Context(), id)
+		} else {
+			_, err = h.db.ExecContext(r.Context(), "UPDATE _trestle_jobs SET status='pending',attempts=0,available_at=?,lease_until=NULL,last_error=NULL,updated_at=? WHERE id=? AND status IN ('dead','cancelled')", h.now().UTC().Format(time.RFC3339Nano), h.now().UTC().Format(time.RFC3339Nano), id)
+		}
 	default:
 		http.Error(w, "invalid action", 400)
 		return

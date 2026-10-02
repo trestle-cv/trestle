@@ -3,7 +3,7 @@
   "lineageVersion": 1,
   "description": "Frozen pre-preview migration lineage. Append-only: retained versions must never be edited; new migrations may only be appended and the manifest regenerated.",
   "normalization": "strip CR; split into lines; trim each line; drop blank lines; join with a single newline; append a trailing newline",
-  "finalVersion": 23,
+  "finalVersion": 24,
   "migrations": [
     {
       "version": 1,
@@ -142,6 +142,12 @@
       "name": "administrator username",
       "sqliteSha256": "77d6eebf18792029c93e4118dec4a543b5df1b8b60217d77319323785410314c",
       "postgresSha256": "176056f55b154fd5d9de60bb9cecaf36740ce8d2e740bc4044ec5a7307327e58"
+    },
+    {
+      "version": 24,
+      "name": "replicated consequence identity",
+      "sqliteSha256": "c8fa7cd0e2efd443d6b9ecda8a9509397a970b12d2756583b580b5f3ff152020",
+      "postgresSha256": "c8fa7cd0e2efd443d6b9ecda8a9509397a970b12d2756583b580b5f3ff152020"
     }
   ]
 }

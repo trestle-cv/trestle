@@ -63,4 +63,9 @@ CREATE TABLE _trestle_cluster_invitations (id TEXT PRIMARY KEY, token_hash BYTEA
 	23: `
 ALTER TABLE _trestle_admins ADD COLUMN username TEXT;
 UPDATE _trestle_admins SET username = split_part(email, '@', 1) WHERE username IS NULL OR trim(username) = '';`,
+	24: `
+ALTER TABLE _trestle_events ADD COLUMN dedup_key TEXT;
+CREATE UNIQUE INDEX _trestle_events_dedup ON _trestle_events(dedup_key);
+ALTER TABLE _trestle_audit ADD COLUMN dedup_key TEXT;
+CREATE UNIQUE INDEX _trestle_audit_dedup ON _trestle_audit(dedup_key);`,
 }
